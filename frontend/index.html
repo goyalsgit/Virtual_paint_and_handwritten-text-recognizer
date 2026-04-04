@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Air Drawing - Improved & Stable</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0a0f;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Toolbar ─────────────────────────────────────────── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: #141420;
+      border-bottom: 1px solid #2a2a40;
+      z-index: 10;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .color-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      border: 2px solid #333;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .color-btn.active {
+      border-color: #fff;
+      transform: scale(1.2);
+    }
+
+    .tool-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #1e1e2e;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .tool-btn:hover {
+      background: #2a2a40;
+    }
+
+    .tool-btn.active {
+      background: #2233aa;
+      border-color: #4466ff;
+      color: #fff;
+    }
+
+    .tool-btn.danger {
+      border-color: #553;
+    }
+
+    .tool-btn.danger:hover {
+      background: #332200;
+    }
+
+    .brush-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #888;
+    }
+
+    .brush-control input[type=range] {
+      width: 80px;
+      accent-color: #4466ff;
+    }
+
+    .ocr-select {
+      padding: 6px 10px;
+      background: #1e1e2e;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 13px;
+    }
+
+    #mode-label {
+      margin-left: auto;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 6px;
+      background: #1a1a2e;
+    }
+
+    /* ── Canvas area ─────────────────────────────────────── */
+    #canvas-wrapper {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      background: #111;
+    }
+
+    #canvas-wrapper.focus-mode {
+      background: #ffffff;
+    }
+
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      opacity: 0.45;
+      transition: opacity 0.2s ease;
+    }
+
+    #canvas-wrapper.focus-mode video {
+      opacity: 0;
+    }
+
+    #draw-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    #overlay-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    /* ── OCR result bar ───────────────────────────────────── */
+    #ocr-bar {
+      display: none;
+      padding: 8px 16px;
+      background: #0e0e20;
+      border-top: 1px solid #2a2a50;
+      font-size: 14px;
+      color: #00e896;
+      flex-shrink: 0;
+    }
+
+    #ocr-bar span {
+      color: #4466aa;
+      margin-right: 8px;
+      font-size: 12px;
+    }
+
+    /* ── Status / hint bar ────────────────────────────────── */
+    #status-bar {
+      padding: 4px 14px;
+      background: #0a0a0f;
+      border-top: 1px solid #1a1a2a;
+      font-size: 11px;
+      color: #555;
+      flex-shrink: 0;
+    }
+
+    /* ── Loading overlay ──────────────────────────────────── */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: #0a0a0f;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      gap: 16px;
+    }
+
+    #loading h2 {
+      color: #aaa;
+      font-size: 18px;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid #222;
+      border-top-color: #4466ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #conn-status {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #1a1a2e;
+    }
+
+    #conn-status.connected {
+      color: #00e896;
+    }
+
+    #conn-status.disconnected {
+      color: #ff4444;
+    }
+
+    /* ── Hand loss indicator ──────────────────────────────── */
+    #hand-loss-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 100, 100, 0.9);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      display: none;
+      z-index: 5;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Loading overlay -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <h2>Loading hand tracking model...</h2>
+    <p style="color:#555;font-size:13px">Allow camera access when prompted</p>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <!-- Colors -->
+    <div id="color-btns"></div>
+
+    <!-- Divider -->
+    <div style="width:1px;height:28px;background:#333;margin:0 4px"></div>
+
+    <!-- Tools -->
+    <button class="tool-btn" id="btn-erase">Eraser</button>
+    <button class="tool-btn danger" id="btn-clear">Clear</button>
+
+    <!-- Brush size -->
+    <div class="brush-control">
+      <span>Brush</span>
+      <input type="range" id="brush-range" min="2" max="28" value="10" />
+      <span id="brush-val">10px</span>
+    </div>
+
+    <!-- OCR mode -->
+    <select class="ocr-select" id="ocr-mode">
+      <option value="sentence">OCR: Sentence</option>
+      <option value="continuous">OCR: Continuous Append</option>
+      <option value="line">OCR: Line</option>
+      <option value="word">OCR: Word</option>
+    </select>
+
+    <!-- Manual OCR trigger -->
+    <button class="tool-btn" id="btn-ocr" style="border-color:#336">Run OCR</button>
+    <button class="tool-btn" id="btn-focus" style="border-color:#888">Focus Board</button>
+
+    <!-- Connection status -->
+    <span id="conn-status" class="disconnected">● Offline</span>
+
+    <!-- Mode label -->
+    <div id="mode-label">◌ READY</div>
+  </div>
+
+  <!-- Main canvas area -->
+  <div id="canvas-wrapper">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="draw-canvas"></canvas>
+    <canvas id="overlay-canvas"></canvas>
+    <div id="hand-loss-indicator">Hand tracking lost...</div>
+  </div>
+
+  <!-- OCR result bar -->
+  <div id="ocr-bar">
+    <span>RECOGNIZED:</span>
+    <span id="ocr-text"></span>
+  </div>
+
+  <!-- Status bar -->
+  <div id="status-bar">
+    INDEX finger = Draw &nbsp;|&nbsp;
+    INDEX + MIDDLE = Pause &nbsp;|&nbsp;
+    FIST = Erase &nbsp;|&nbsp;
+    Auto-OCR after 2.5s pause &nbsp;|&nbsp;
+    Brush size: use slider above
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════════
+    // AIR DRAWING — IMPROVED & STABLE VERSION
+    //
+    // Key improvements:
+    //   ✓ Enhanced gesture stability (4-frame threshold + hysteresis)
+    //   ✓ Improved finger detection (larger threshold + thumb check)
+    //   ✓ Optimized OneEuroFilter parameters
+    //   ✓ Adaptive drawing deadzone
+    //   ✓ Stroke interpolation for fast movements
+    //   ✓ Graceful hand loss recovery
+    //   ✓ Exponential backoff WebSocket reconnection
+    //   ✓ Better performance optimizations
+    // ═══════════════════════════════════════════════════════════════════
+
+    // ── Config ─────────────────────────────────────────────────────────
+    const WS_URL = (() => {
+      if (window.location.protocol === "file:") {
+        return "ws://localhost:8000/ws";
+      }
+      const host = window.location.hostname;
+      if (host === "localhost" || host === "127.0.0.1") {
+        return "ws://localhost:8000/ws";
+      }
+      if (!host) {
+        return "ws://localhost:8000/ws";
+      }
+      const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+      return `${wsProtocol}://${host}/ws`;
+    })();
+
+    const BACKEND_URL = (() => {
+      if (window.location.origin && window.location.origin !== "null") {
+        return window.location.origin;
+      }
+      return WS_URL
+        .replace("ws://", "http://")
+        .replace("wss://", "https://")
+        .replace("/ws", "");
+    })();
+
+    // MediaPipe CDN URLs
+    const MEDIAPIPE_CDN_MODULE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/vision_bundle.mjs";
+    const MEDIAPIPE_CDN_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm";
+    const MEDIAPIPE_LOCAL_MODULE = "/static/vendor/mediapipe/vision_bundle.mjs";
+    const MEDIAPIPE_LOCAL_WASM = "/static/vendor/mediapipe/wasm";
+    let visionModule = null;
+
+    const COLORS = [
+      { name: "Black", hex: "#111111", rgb: [17, 17, 17] },
+      { name: "White", hex: "#ffffff", rgb: [255, 255, 255] },
+      { name: "Red", hex: "#ff3333", rgb: [255, 60, 60] },
+      { name: "Green", hex: "#33dd55", rgb: [60, 210, 60] },
+      { name: "Blue", hex: "#4488ff", rgb: [100, 150, 255] },
+      { name: "Yellow", hex: "#ffee33", rgb: [255, 230, 40] },
+      { name: "Orange", hex: "#ff9922", rgb: [255, 170, 40] },
+      { name: "Pink", hex: "#ff88ff", rgb: [255, 130, 200] },
+      { name: "Cyan", hex: "#22eeff", rgb: [40, 230, 230] },
+    ];
+
+    // ── State ───────────────────────────────────────────────────────────
+    const DEFAULT_BRUSH_SIZE = 10;
+    const ERASER_RADIUS = 22;
+    const LOST_HAND_RESET_FRAMES = 12; // IMPROVED: Increased from 6 to 12 for better recovery
+    const DRAW_DEADZONE = 0.5;
+    const GESTURE_STABLE_FRAMES = 4; // IMPROVED: Increased from 2 to 4 for more stability
+    const FINGER_THRESHOLD = 0.04; // IMPROVED: Increased from 0.025 to 0.04
+
+    let colorIdx = 0;
+    let brushSize = DEFAULT_BRUSH_SIZE;
+    let eraserMode = false;
+    let prevX = null;
+    let prevY = null;
+    let mode = "IDLE";
+    let lastDrawT = 0;
+    let lastOcrT = 0;
+    let handPresent = false;
+    let ws = null;
+    let wsReady = false;
+    let landmarker = null;
+    let animId = null;
+    let focusMode = false;
+    let ocrInFlight = false;
+    let handLossCounter = 0; // IMPROVED: Renamed from missingHandFrames for clarity
+    let stableGesture = "IDLE";
+    let gestureCandidate = "IDLE";
+    let gestureCandidateFrames = 0;
+    let continuousTextBuffer = "";
+    let inFlightContinuous = false;
+    let wsReconnectAttempts = 0; // IMPROVED: Track reconnection attempts
+    let wsReconnectTimer = null; // IMPROVED: Timer for reconnection
+    let adaptiveDeadzone = DRAW_DEADZONE; // IMPROVED: Adaptive deadzone based on speed
+
+    // ── Elements ────────────────────────────────────────────────────────
+    const video = document.getElementById("webcam");
+    const drawCanvas = document.getElementById("draw-canvas");
+    const overCanvas = document.getElementById("overlay-canvas");
+    const dCtx = drawCanvas.getContext("2d", { willReadFrequently: true });
+    const oCtx = overCanvas.getContext("2d");
+    const modeLabel = document.getElementById("mode-label");
+    const ocrBar = document.getElementById("ocr-bar");
+    const ocrText = document.getElementById("ocr-text");
+    const connStatus = document.getElementById("conn-status");
+    const eraseBtn = document.getElementById("btn-erase");
+    const focusBtn = document.getElementById("btn-focus");
+    const canvasWrapper = document.getElementById("canvas-wrapper");
+    const handLossIndicator = document.getElementById("hand-loss-indicator");
+
+    function resetStrokeState() {
+      prevX = null;
+      prevY = null;
+      pointerFilter.reset();
+      stableGesture = "IDLE";
+      gestureCandidate = "IDLE";
+      gestureCandidateFrames = 0;
+    }
+
+    function breakStrokePath() {
+      prevX = null;
+      prevY = null;
+    }
+
+    function setEraserMode(enabled) {
+      eraserMode = enabled;
+      eraseBtn.classList.toggle("active", enabled);
+      resetStrokeState();
+    }
+
+    function setFocusMode(enabled) {
+      focusMode = enabled;
+      canvasWrapper.classList.toggle("focus-mode", enabled);
+      focusBtn.classList.toggle("active", enabled);
+
+      if (enabled) {
+        colorIdx = 0;
+        setEraserMode(false);
+        document.querySelectorAll(".color-btn").forEach(b => b.classList.remove("active"));
+        colorBtns.children[colorIdx]?.classList.add("active");
+      }
+    }
+
+    // ── Build color buttons ──────────────────────────────────────────────
+    const colorBtns = document.getElementById("color-btns");
+    colorBtns.style.cssText = "display:flex;gap:6px;align-items:center";
+    COLORS.forEach((c, i) => {
+      const btn = document.createElement("div");
+      btn.className = "color-btn" + (i === 0 ? " active" : "");
+      btn.style.background = c.hex;
+      btn.title = c.name;
+      btn.onclick = () => {
+        colorIdx = i;
+        setEraserMode(false);
+        document.querySelectorAll(".color-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      };
+      colorBtns.appendChild(btn);
+    });
+
+    // ── Toolbar events ───────────────────────────────────────────────────
+    eraseBtn.onclick = function () {
+      setEraserMode(!eraserMode);
+    };
+
+    document.getElementById("btn-clear").onclick = () => {
+      dCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+      ocrBar.style.display = "none";
+      ocrText.textContent = "";
+      continuousTextBuffer = "";
+      lastDrawT = 0;
+      resetStrokeState();
+    };
+
+    document.getElementById("brush-range").oninput = function () {
+      brushSize = parseInt(this.value);
+      document.getElementById("brush-val").textContent = brushSize + "px";
+    };
+
+    document.getElementById("btn-ocr").onclick = () => triggerOCR();
+
+    focusBtn.onclick = () => setFocusMode(!focusMode);
+
+    // ── Resize canvases to fill container ───────────────────────────────
+    function resizeCanvases() {
+      const wrapper = document.getElementById("canvas-wrapper");
+      const W = wrapper.clientWidth;
+      const H = wrapper.clientHeight;
+      drawCanvas.width = W; drawCanvas.height = H;
+      overCanvas.width = W; overCanvas.height = H;
+    }
+    resizeCanvases();
+    window.addEventListener("resize", resizeCanvases);
+
+    // ── Pointer Smoother ────────────────────────────────────────────────
+    function smoothingFactor(deltaSeconds, cutoff) {
+      const tau = 1 / (2 * Math.PI * cutoff);
+      return 1 / (1 + tau / deltaSeconds);
+    }
+
+    class LowPassFilter {
+      constructor() {
+        this.initialized = false;
+        this.value = 0;
+      }
+
+      filter(nextValue, alpha) {
+        if (!this.initialized) {
+          this.initialized = true;
+          this.value = nextValue;
+          return nextValue;
+        }
+        this.value = alpha * nextValue + (1 - alpha) * this.value;
+        return this.value;
+      }
+
+      reset() {
+        this.initialized = false;
+        this.value = 0;
+      }
+    }
+
+    class OneEuroFilter {
+      // IMPROVED: Optimized parameters for better stability
+      constructor({ minCutoff = 0.8, beta = 0.15, derivativeCutoff = 2.0 } = {}) {
+        this.minCutoff = minCutoff;
+        this.beta = beta;
+        this.derivativeCutoff = derivativeCutoff;
+        this.positionFilter = new LowPassFilter();
+        this.derivativeFilter = new LowPassFilter();
+        this.lastValue = null;
+        this.lastTimestamp = null;
+      }
+
+      filter(value, timestampMs) {
+        if (this.lastTimestamp === null) {
+          this.lastTimestamp = timestampMs;
+          this.lastValue = value;
+          return this.positionFilter.filter(value, 1);
+        }
+
+        const deltaSeconds = Math.max((timestampMs - this.lastTimestamp) / 1000, 1 / 240);
+        const rawDerivative = this.lastValue === null ? 0 : (value - this.lastValue) / deltaSeconds;
+        const derivativeAlpha = smoothingFactor(deltaSeconds, this.derivativeCutoff);
+        const filteredDerivative = this.derivativeFilter.filter(rawDerivative, derivativeAlpha);
+        const cutoff = this.minCutoff + this.beta * Math.abs(filteredDerivative);
+        const positionAlpha = smoothingFactor(deltaSeconds, cutoff);
+        const filteredValue = this.positionFilter.filter(value, positionAlpha);
+
+        this.lastTimestamp = timestampMs;
+        this.lastValue = value;
+        return filteredValue;
+      }
+
+      reset() {
+        this.positionFilter.reset();
+        this.derivativeFilter.reset();
+        this.lastValue = null;
+        this.lastTimestamp = null;
+      }
+    }
+
+    class PointFilter {
+      constructor() {
+        // IMPROVED: Optimized filter parameters
+        this.xFilter = new OneEuroFilter({ minCutoff: 0.8, beta: 0.15, derivativeCutoff: 2.0 });
+        this.yFilter = new OneEuroFilter({ minCutoff: 0.8, beta: 0.15, derivativeCutoff: 2.0 });
+      }
+
+      filter(x, y, timestampMs) {
+        return [
+          Math.round(this.xFilter.filter(x, timestampMs)),
+          Math.round(this.yFilter.filter(y, timestampMs)),
+        ];
+      }
+
+      reset() {
+        this.xFilter.reset();
+        this.yFilter.reset();
+      }
+    }
+    const pointerFilter = new PointFilter();
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    // IMPROVED: Better gesture classification with thumb detection
+    function classifyGesture(lm) {
+      const [idx, mid, rng, pky] = fingersUp(lm);
+
+      // Check thumb position for fist detection
+      const thumbClosed = lm[4].x > lm[3].x - 0.03;
+      const allClosed = !idx && !mid && !rng && !pky && thumbClosed;
+
+      if (allClosed) return "ERASE";
+
+      // Strong two-finger detection (PAUSE has priority)
+      if (idx && mid && !rng && !pky) return "PAUSE";
+
+      // Single index finger
+      if (idx && !mid && !rng && !pky) return eraserMode ? "ERASE" : "DRAW";
+
+      return "IDLE";
+    }
+
+    // IMPROVED: Gesture hysteresis for smoother transitions
+    function updateStableGesture(nextGesture) {
+      if (gestureCandidate === nextGesture) {
+        gestureCandidateFrames += 1;
+      } else {
+        gestureCandidate = nextGesture;
+        gestureCandidateFrames = 1;
+      }
+
+      // IMPROVED: Require MORE frames to switch away from current stable gesture
+      // This creates hysteresis that prevents rapid flickering
+      const requiredFrames = (stableGesture === nextGesture) ? 2 : GESTURE_STABLE_FRAMES;
+
+      if (gestureCandidateFrames >= requiredFrames) {
+        stableGesture = nextGesture;
+      }
+
+      return stableGesture;
+    }
+
+    // IMPROVED: Increased threshold for more stable finger detection
+    function fingersUp(lm) {
+      const pairs = [[8, 6], [12, 10], [16, 14], [20, 18]]; // [tip, pip]
+      return pairs.map(([tip, pip]) => lm[tip].y < lm[pip].y - FINGER_THRESHOLD);
+    }
+
+    // ── Set mode label ───────────────────────────────────────────────────
+    function setMode(m) {
+      mode = m;
+      const map = {
+        DRAW: { text: "● DRAWING", color: "#00dd55" },
+        ERASE: { text: "◌ ERASING", color: "#2255ff" },
+        PAUSE: { text: "◎ PAUSED", color: "#00cccc" },
+        IDLE: { text: "◌ READY", color: "#555" },
+      };
+      const entry = map[m] || map.IDLE;
+      modeLabel.textContent = entry.text;
+      modeLabel.style.color = entry.color;
+    }
+
+    // ── Auto OCR logic ───────────────────────────────────────────────────
+    function checkAutoOCR() {
+      const now = Date.now() / 1000;
+      if (!ocrInFlight && lastDrawT > 0 && (now - lastDrawT) > 2.5 && (now - lastOcrT) > 5.0) {
+        if (canvasHasInk()) {
+          triggerOCR();
+          lastDrawT = 0;
+        }
+      }
+    }
+
+    function canvasHasInk() {
+      const data = dCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height).data;
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] > 20) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function buildOcrImage() {
+      const src = dCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+      const out = new ImageData(src.width, src.height);
+
+      for (let i = 0; i < src.data.length; i += 4) {
+        const alpha = src.data[i + 3];
+        if (alpha > 20) {
+          out.data[i] = 0;
+          out.data[i + 1] = 0;
+          out.data[i + 2] = 0;
+          out.data[i + 3] = alpha;
+        }
+      }
+
+      const offscreen = document.createElement("canvas");
+      offscreen.width = src.width;
+      offscreen.height = src.height;
+      const offscreenCtx = offscreen.getContext("2d");
+      offscreenCtx.fillStyle = "#ffffff";
+      offscreenCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+      offscreenCtx.putImageData(out, 0, 0);
+      return offscreen.toDataURL("image/png");
+    }
+
+    function buildRawCanvasImage() {
+      const offscreen = document.createElement("canvas");
+      offscreen.width = drawCanvas.width;
+      offscreen.height = drawCanvas.height;
+      const offscreenCtx = offscreen.getContext("2d");
+      offscreenCtx.fillStyle = "#ffffff";
+      offscreenCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+      offscreenCtx.drawImage(drawCanvas, 0, 0);
+      return offscreen.toDataURL("image/png");
+    }
+
+    function getOcrTargetSize(mode, cropped) {
+      if (mode === "word") {
+        return {
+          width: Math.max(320, Math.round(cropped.width * 1.35)),
+          height: Math.max(120, Math.round(cropped.height * 1.35)),
+        };
+      }
+      if (mode === "line") {
+        return {
+          width: Math.max(640, Math.round(cropped.width * 1.4)),
+          height: Math.max(180, Math.round(cropped.height * 1.45)),
+        };
+      }
+      return {
+        width: Math.max(960, Math.round(cropped.width * 1.5)),
+        height: Math.max(240, Math.round(cropped.height * 1.6)),
+      };
+    }
+
+    function cropInkCanvas(canvas, padding = 20) {
+      const ctx = canvas.getContext("2d");
+      const { width, height } = canvas;
+      const src = ctx.getImageData(0, 0, width, height);
+      const data = src.data;
+
+      let minX = width;
+      let minY = height;
+      let maxX = -1;
+      let maxY = -1;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const alpha = data[(y * width + x) * 4 + 3];
+          if (alpha > 20) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (maxX < 0 || maxY < 0) {
+        return null;
+      }
+
+      minX = Math.max(0, minX - padding);
+      minY = Math.max(0, minY - padding);
+      maxX = Math.min(width - 1, maxX + padding);
+      maxY = Math.min(height - 1, maxY + padding);
+
+      const cropW = maxX - minX + 1;
+      const cropH = maxY - minY + 1;
+      const cropped = document.createElement("canvas");
+      cropped.width = cropW;
+      cropped.height = cropH;
+      cropped.getContext("2d").putImageData(
+        ctx.getImageData(minX, minY, cropW, cropH),
+        0,
+        0
+      );
+      return cropped;
+    }
+
+    function buildTrainingImage(mode = "sentence") {
+      const maskDataUrl = buildOcrImage();
+      const img = new Image();
+
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          const temp = document.createElement("canvas");
+          temp.width = img.width;
+          temp.height = img.height;
+          const tempCtx = temp.getContext("2d");
+          tempCtx.drawImage(img, 0, 0);
+
+          const cropped = cropInkCanvas(temp, 24);
+          if (!cropped) {
+            reject(new Error("No handwriting found"));
+            return;
+          }
+
+          const target = getOcrTargetSize(mode, cropped);
+          const finalCanvas = document.createElement("canvas");
+          finalCanvas.width = target.width;
+          finalCanvas.height = target.height;
+          const finalCtx = finalCanvas.getContext("2d");
+          finalCtx.fillStyle = "#ffffff";
+          finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+          finalCtx.imageSmoothingEnabled = true;
+          const maxInkWidth = Math.round(finalCanvas.width * 0.84);
+          const maxInkHeight = Math.round(finalCanvas.height * 0.72);
+          const scale = Math.min(maxInkWidth / cropped.width, maxInkHeight / cropped.height);
+          const drawWidth = Math.max(1, Math.round(cropped.width * scale));
+          const drawHeight = Math.max(1, Math.round(cropped.height * scale));
+          const dx = Math.round((finalCanvas.width - drawWidth) / 2);
+          const dy = Math.round((finalCanvas.height - drawHeight) / 2);
+          finalCtx.drawImage(cropped, dx, dy, drawWidth, drawHeight);
+          resolve(finalCanvas.toDataURL("image/png"));
+        };
+        img.onerror = () => reject(new Error("Could not prepare training image"));
+        img.src = maskDataUrl;
+      });
+    }
+
+    // ── OCR: send canvas to backend ──────────────────────────────────────
+    async function triggerOCR() {
+      if (ocrInFlight) {
+        return;
+      }
+      if (!wsReady) {
+        ocrText.textContent = "Not connected to server";
+        ocrBar.style.display = "block";
+        return;
+      }
+      if (!canvasHasInk()) {
+        ocrText.textContent = "Draw some text first";
+        ocrBar.style.display = "block";
+        return;
+      }
+      try {
+        ocrInFlight = true;
+        const mode_select = document.getElementById("ocr-mode").value;
+        inFlightContinuous = (mode_select === "continuous");
+        const mode_val = inFlightContinuous ? "word" : mode_select;
+
+        const b64 = await buildTrainingImage(mode_val);
+        const sourceImage = buildRawCanvasImage();
+        lastOcrT = Date.now() / 1000;
+        ws.send(JSON.stringify({
+          type: "ocr",
+          mode: mode_val,
+          image: b64,
+          source_image: sourceImage,
+          preprocessed: true,
+        }));
+        ocrText.textContent = inFlightContinuous ? (continuousTextBuffer + " " + "Recognizing...").trim() : "Recognizing...";
+        ocrBar.style.display = "block";
+      } catch (error) {
+        ocrInFlight = false;
+        ocrText.textContent = `Could not prepare handwriting: ${error.message}`;
+        ocrBar.style.display = "block";
+      }
+    }
+
+    // IMPROVED: WebSocket connection with exponential backoff
+    function connectWS() {
+      if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+      }
+
+      try {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+          wsReady = true;
+          wsReconnectAttempts = 0; // Reset on successful connection
+          connStatus.textContent = "● Connected";
+          connStatus.className = "connected";
+          console.log("WS connected to", WS_URL);
+        };
+
+        ws.onclose = () => {
+          wsReady = false;
+          ocrInFlight = false;
+          connStatus.textContent = "● Offline";
+          connStatus.className = "disconnected";
+
+          // IMPROVED: Exponential backoff - 1s, 2s, 4s, 8s, max 30s
+          wsReconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts - 1), 30000);
+          console.log(`WS reconnecting in ${delay}ms (attempt ${wsReconnectAttempts})`);
+          wsReconnectTimer = setTimeout(connectWS, delay);
+        };
+
+        ws.onerror = (e) => {
+          console.warn("WS error (server may be offline):", e);
+          wsReady = false;
+          ocrInFlight = false;
+        };
+
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "ocr_result") {
+            ocrInFlight = false;
+            if (msg.success && msg.text) {
+              if (inFlightContinuous) {
+                continuousTextBuffer = (continuousTextBuffer + " " + msg.text).trim();
+                ocrText.textContent = continuousTextBuffer;
+                dCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                resetStrokeState();
+              } else {
+                ocrText.textContent = msg.text;
+              }
+              ocrBar.style.display = "block";
+            } else {
+              ocrText.textContent = inFlightContinuous ? (continuousTextBuffer + " [Could not recognize]") : "Could not recognize — try writing larger";
+              ocrBar.style.display = "block";
+            }
+          } else if (msg.type === "error") {
+            ocrInFlight = false;
+            ocrText.textContent = msg.message || "OCR failed";
+            ocrBar.style.display = "block";
+          }
+        };
+      } catch (e) {
+        console.warn("WS connection failed:", e);
+        wsReady = false;
+        ocrInFlight = false;
+
+        // IMPROVED: Schedule reconnection with backoff
+        wsReconnectAttempts++;
+        const delay = Math.min(3000 * wsReconnectAttempts, 30000);
+        wsReconnectTimer = setTimeout(connectWS, delay);
+      }
+    }
+
+    // ── MediaPipe setup ──────────────────────────────────────────────────
+    async function ensureMediaPipeLoaded() {
+      if (visionModule?.FilesetResolver && visionModule?.HandLandmarker) {
+        return visionModule;
+      }
+
+      // Try CDN first
+      try {
+        document.querySelector("#loading h2").textContent = "Loading hand model (CDN)...";
+        visionModule = await import(MEDIAPIPE_CDN_MODULE);
+        if (visionModule?.FilesetResolver && visionModule?.HandLandmarker) {
+          console.log("MediaPipe loaded from CDN");
+          return visionModule;
+        }
+      } catch (error) {
+        console.warn("CDN import failed, trying local vendor:", error);
+      }
+
+      // Fall back to local vendor bundle
+      try {
+        document.querySelector("#loading h2").textContent = "Loading hand model (local)...";
+        visionModule = await import(MEDIAPIPE_LOCAL_MODULE);
+        if (visionModule?.FilesetResolver && visionModule?.HandLandmarker) {
+          console.log("MediaPipe loaded from local vendor");
+          visionModule.__useLocalWasm = true;
+          return visionModule;
+        }
+      } catch (error) {
+        console.warn("Local vendor import failed:", error);
+      }
+
+      throw new Error("MediaPipe could not be loaded. Check your internet connection.");
+    }
+
+    async function setupMediaPipe() {
+      const visionLib = await ensureMediaPipeLoaded();
+      const { HandLandmarker, FilesetResolver } = visionLib;
+
+      if (!HandLandmarker || !FilesetResolver) {
+        throw new Error("MediaPipe Tasks loaded incorrectly. Check the browser console for CDN errors.");
+      }
+
+      const wasmPath = visionLib.__useLocalWasm ? MEDIAPIPE_LOCAL_WASM : MEDIAPIPE_CDN_WASM;
+      const vision = await FilesetResolver.forVisionTasks(wasmPath);
+
+      landmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO",
+        numHands: 1,
+        minHandDetectionConfidence: 0.5,
+        minHandPresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      console.log("MediaPipe ready");
+    }
+
+    // ── Webcam setup ─────────────────────────────────────────────────────
+    async function setupCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: "user" },
+        audio: false,
+      });
+      video.srcObject = stream;
+      await new Promise(resolve => video.onloadedmetadata = resolve);
+      video.play();
+    }
+
+    // ── Draw skeleton on overlay canvas ─────────────────────────────────
+    function drawSkeleton(lm, W, H) {
+      const conns = [
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [5, 6], [6, 7], [7, 8],
+        [0, 9], [9, 10], [10, 11], [11, 12],
+        [0, 13], [13, 14], [14, 15], [15, 16],
+        [0, 17], [17, 18], [18, 19], [19, 20],
+        [5, 9], [9, 13], [13, 17],
+      ];
+      oCtx.strokeStyle = "rgba(0,200,0,0.6)";
+      oCtx.lineWidth = 1.5;
+      for (const [a, b] of conns) {
+        oCtx.beginPath();
+        oCtx.moveTo((1 - lm[a].x) * W, lm[a].y * H);
+        oCtx.lineTo((1 - lm[b].x) * W, lm[b].y * H);
+        oCtx.stroke();
+      }
+      for (let i = 0; i < 21; i++) {
+        const x = (1 - lm[i].x) * W;
+        const y = lm[i].y * H;
+        oCtx.beginPath();
+        oCtx.arc(x, y, i === 8 ? 7 : 3, 0, Math.PI * 2);
+        oCtx.fillStyle = i === 8 ? "#00ff66" : "#008800";
+        oCtx.fill();
+      }
+    }
+
+    // ── Main render loop ─────────────────────────────────────────────────
+    let lastVideoTime = -1;
+
+    function renderLoop() {
+      animId = requestAnimationFrame(renderLoop);
+
+      if (!landmarker || video.readyState < 2) return;
+
+      const W = overCanvas.width;
+      const H = overCanvas.height;
+      const now = performance.now();
+
+      if (video.currentTime === lastVideoTime) return;
+      lastVideoTime = video.currentTime;
+
+      const result = landmarker.detectForVideo(video, now);
+      oCtx.clearRect(0, 0, W, H);
+
+      const nowSec = Date.now() / 1000;
+
+      if (result.landmarks && result.landmarks.length > 0) {
+        const lm = result.landmarks[0];
+        drawSkeleton(lm, W, H);
+        handPresent = true;
+        handLossCounter = 0; // IMPROVED: Reset counter on successful detection
+        handLossIndicator.style.display = "none";
+
+        const rawX = clamp(Math.round((1 - lm[8].x) * W), 0, W - 1);
+        const rawY = clamp(Math.round(lm[8].y * H), 0, H - 1);
+        const [cx, cy] = pointerFilter.filter(rawX, rawY, now);
+        const gesture = updateStableGesture(classifyGesture(lm));
+
+        // ── Gesture → draw ───────────────────────────────────────────
+        if (gesture === "ERASE") {
+          setMode("ERASE");
+          breakStrokePath();
+          dCtx.globalCompositeOperation = "destination-out";
+          dCtx.beginPath();
+          dCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
+          dCtx.fill();
+          dCtx.globalCompositeOperation = "source-over";
+          oCtx.strokeStyle = "#3355ff";
+          oCtx.lineWidth = 2;
+          oCtx.beginPath();
+          oCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
+          oCtx.stroke();
+          lastDrawT = nowSec;
+
+        } else if (gesture === "DRAW") {
+          if (eraserMode) {
+            setMode("ERASE");
+            breakStrokePath();
+            dCtx.globalCompositeOperation = "destination-out";
+            dCtx.beginPath();
+            dCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
+            dCtx.fill();
+            dCtx.globalCompositeOperation = "source-over";
+            oCtx.strokeStyle = "#3355ff";
+            oCtx.lineWidth = 2;
+            oCtx.beginPath();
+            oCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
+            oCtx.stroke();
+            lastDrawT = nowSec;
+          } else {
+            setMode("DRAW");
+            const col = COLORS[colorIdx].rgb;
+            dCtx.strokeStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+            dCtx.lineWidth = brushSize;
+            dCtx.lineCap = "round";
+            dCtx.lineJoin = "round";
+
+            if (prevX === null) {
+              prevX = cx; prevY = cy;
+            }
+
+            const dx = cx - prevX;
+            const dy = cy - prevY;
+            const dist = Math.hypot(dx, dy);
+
+            // IMPROVED: Adaptive deadzone based on speed
+            const speed = dist * 60; // Rough pixels per second
+            adaptiveDeadzone = speed > 100 ? 0.3 : 0.8;
+
+            if (dist >= adaptiveDeadzone) {
+              dCtx.beginPath();
+              dCtx.moveTo(prevX, prevY);
+              dCtx.lineTo(cx, cy);
+              dCtx.stroke();
+
+              // IMPROVED: Interpolate dots for fast movements to prevent gaps
+              if (dist > 15) {
+                const steps = Math.ceil(dist / 8);
+                for (let i = 1; i <= steps; i++) {
+                  const t = i / steps;
+                  const ix = prevX + dx * t;
+                  const iy = prevY + dy * t;
+                  dCtx.beginPath();
+                  dCtx.arc(ix, iy, brushSize / 2, 0, Math.PI * 2);
+                  dCtx.fill();
+                }
+              } else {
+                // Single dot at tip
+                dCtx.beginPath();
+                dCtx.arc(cx, cy, brushSize / 2, 0, Math.PI * 2);
+                dCtx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+                dCtx.fill();
+              }
+
+              prevX = cx;
+              prevY = cy;
+            }
+            lastDrawT = nowSec;
+
+            // Cursor feedback
+            oCtx.strokeStyle = "#000";
+            oCtx.lineWidth = 2;
+            oCtx.beginPath();
+            oCtx.arc(cx, cy, brushSize / 2 + 2, 0, Math.PI * 2);
+            oCtx.stroke();
+            oCtx.fillStyle = `rgb(${COLORS[colorIdx].rgb.join(",")})`;
+            oCtx.beginPath();
+            oCtx.arc(cx, cy, brushSize / 2, 0, Math.PI * 2);
+            oCtx.fill();
+          }
+
+        } else if (gesture === "PAUSE") {
+          setMode("PAUSE");
+          breakStrokePath();
+          oCtx.strokeStyle = "#00cccc";
+          oCtx.lineWidth = 2;
+          oCtx.beginPath();
+          oCtx.moveTo(cx - 12, cy); oCtx.lineTo(cx + 12, cy);
+          oCtx.moveTo(cx, cy - 12); oCtx.lineTo(cx, cy + 12);
+          oCtx.stroke();
+
+        } else {
+          setMode("IDLE");
+          breakStrokePath();
+        }
+
+      } else {
+        // IMPROVED: Graceful hand loss recovery
+        handPresent = false;
+        handLossCounter++;
+
+        // Show indicator after a few frames, before full reset
+        if (handLossCounter >= 4 && handLossCounter < LOST_HAND_RESET_FRAMES) {
+          handLossIndicator.style.display = "block";
+        }
+
+        // Only reset after extended loss
+        if (handLossCounter >= LOST_HAND_RESET_FRAMES) {
+          setMode("IDLE");
+          resetStrokeState();
+          handLossIndicator.style.display = "none";
+        }
+      }
+
+      checkAutoOCR();
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────
+    async function init() {
+      try {
+        await setupCamera();
+        await setupMediaPipe();
+        document.getElementById("loading").style.display = "none";
+        connectWS();
+        renderLoop();
+      } catch (err) {
+        document.querySelector("#loading h2").textContent = "Error: " + err.message;
+        console.error(err);
+      }
+    }
+
+    init();
+  </script>
+</body>
+
+</html>
