@@ -207,7 +207,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         "success": False,
                         "message": "Could not recognize text"
                     }))
-
     except WebSocketDisconnect:
         print("Client disconnected")
     except Exception as e:
