@@ -3,3 +3,12 @@ __pycache__/
 *.pyc
 .DS_Store
 drawing.png
+
+# OCR debug images (auto-generated, can be large)
+artifacts/ocr_debug/
+
+# Collected training samples (large, user-generated)
+data/collected/
+
+# Fine-tuned model checkpoints (large; add back if you want to ship them)
+artifacts/trocr_airdraw/

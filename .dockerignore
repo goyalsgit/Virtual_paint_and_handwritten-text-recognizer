@@ -1,0 +1,18 @@
+# Don't send these into the Docker build context
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+.git/
+.gitignore
+
+# Large auto-generated files
+artifacts/ocr_debug/
+
+# Training data (collected samples)
+data/collected/
+
+# Local dev notes
+*.md
+training/
+docs/
