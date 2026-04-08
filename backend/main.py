@@ -114,6 +114,39 @@ def save_debug_ocr_bundle(source_canvas, ocr_input, mode: str, preprocessed: boo
     )
 
 
+class SampleSaveRequest(BaseModel):
+    image: str
+    text: str
+    split: str = "train"
+    source: str = "browser"
+    mode: str = "word"
+
+
+def append_manifest_row(image_path: Path, text: str, split: str, source: str, created_at: str):
+    DATASET_DIR.mkdir(parents=True, exist_ok=True)
+
+    row = {
+        "image": str(image_path.relative_to(PROJECT_ROOT)),
+        "text": text,
+        "split": split,
+        "source": source,
+        "created_at": created_at,
+    }
+
+    with MANIFEST_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=True) + "\n")
+
+    csv_exists = CSV_PATH.exists()
+    with CSV_PATH.open("a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["image", "text", "split", "source", "created_at"],
+        )
+        if not csv_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+
 
 
 @app.get("/")
@@ -145,6 +178,46 @@ async def hand_landmarker():
     return {"error": "Model file not found"}
 
 
+@app.post("/api/samples")
+async def save_sample(payload: SampleSaveRequest):
+    text = payload.text.strip()
+    split = payload.split.strip().lower()
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Sample label is required")
+
+    if split not in {"train", "val", "test"}:
+        raise HTTPException(status_code=400, detail="Split must be train, val, or test")
+
+    image = base64_to_cv2(payload.image)
+    if image is None:
+        raise HTTPException(status_code=400, detail="Could not decode sample image")
+
+    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S%f")
+    created_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    target_dir = WORDS_DIR / split
+    target_dir.mkdir(parents=True, exist_ok=True)
+    image_path = target_dir / f"{timestamp}.png"
+
+    save_debug_image(image, image_path)
+    append_manifest_row(
+        image_path=image_path,
+        text=text,
+        split=split,
+        source=payload.source.strip() or "browser",
+        created_at=created_at,
+    )
+
+    return {
+        "success": True,
+        "image": str(image_path.relative_to(PROJECT_ROOT)),
+        "text": text,
+        "split": split,
+        "mode": payload.mode,
+        "created_at": created_at,
+    }
+
+
 
 
 @app.websocket("/ws")
@@ -156,15 +229,15 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Receive message from browser
             data = await websocket.receive_text()
-            msg  = json.loads(data)
+            msg = json.loads(data)
 
             if msg.get("type") == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
                 continue
 
             if msg.get("type") == "ocr":
-                mode     = msg.get("mode", "sentence")
-                b64_img  = msg.get("image", "")
+                mode = msg.get("mode", "sentence")
+                b64_img = msg.get("image", "")
                 source_b64 = msg.get("source_image", "")
                 preprocessed = bool(msg.get("preprocessed", False))
 
@@ -216,5 +289,5 @@ async def websocket_endpoint(websocket: WebSocket):
                 "type": "error",
                 "message": str(e)
             }))
-        except:
+        except Exception:
             pass
