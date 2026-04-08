@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-import evaluate
+import jiwer
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
@@ -85,11 +85,14 @@ def main():
     model.config.decoder_start_token_id = processor.tokenizer.cls_token_id
     model.config.pad_token_id = processor.tokenizer.pad_token_id
     model.config.eos_token_id = processor.tokenizer.sep_token_id
-    model.config.max_length = args.max_target_length
-    model.config.early_stopping = True
-    model.config.no_repeat_ngram_size = 0
-    model.config.length_penalty = 1.0
-    model.config.num_beams = 4
+    model.generation_config.decoder_start_token_id = processor.tokenizer.cls_token_id
+    model.generation_config.pad_token_id = processor.tokenizer.pad_token_id
+    model.generation_config.eos_token_id = processor.tokenizer.sep_token_id
+    model.generation_config.max_length = args.max_target_length
+    model.generation_config.early_stopping = True
+    model.generation_config.no_repeat_ngram_size = 0
+    model.generation_config.length_penalty = 1.0
+    model.generation_config.num_beams = 4
 
     train_ds = OCRDataset(args.train_manifest, processor, args.max_target_length)
     val_ds = OCRDataset(args.val_manifest, processor, args.max_target_length)
@@ -102,22 +105,19 @@ def main():
         f"test_samples={len(test_ds) if test_ds is not None else 0}"
     )
 
-    cer_metric = evaluate.load("cer")
-    wer_metric = evaluate.load("wer")
-
     def compute_metrics(pred):
         pred_ids = pred.predictions
         label_ids = pred.label_ids
         pred_str = processor.batch_decode(pred_ids, skip_special_tokens=True)
         label_ids = np.where(label_ids == -100, processor.tokenizer.pad_token_id, label_ids)
         label_str = processor.batch_decode(label_ids, skip_special_tokens=True)
-        cer = cer_metric.compute(predictions=pred_str, references=label_str)
-        wer = wer_metric.compute(predictions=pred_str, references=label_str)
+        cer = jiwer.cer(label_str, pred_str)
+        wer = jiwer.wer(label_str, pred_str)
         return {"cer": cer, "wer": wer}
 
     training_args = Seq2SeqTrainingArguments(
         predict_with_generate=True,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         logging_strategy="steps",
         logging_steps=50,
@@ -141,12 +141,12 @@ def main():
 
     trainer = Seq2SeqTrainer(
         model=model,
-        tokenizer=processor.feature_extractor,
         args=training_args,
         compute_metrics=compute_metrics,
         train_dataset=train_ds,
         eval_dataset=val_ds,
         data_collator=default_data_collator,
+        processing_class=processor,
     )
 
     trainer.train()
