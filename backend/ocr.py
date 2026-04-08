@@ -1,4 +1,4 @@
-import os
+import os   
 import re
 import time
 from functools import lru_cache
@@ -383,3 +383,5 @@ def run_ocr(canvas, mode="sentence", preprocessed=False):
         return engine.predict(canvas, mode=mode, preprocessed=preprocessed)
     except Exception:
         return ""
+
+#git change
