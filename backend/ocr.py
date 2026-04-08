@@ -385,4 +385,4 @@ def run_ocr(canvas, mode="sentence", preprocessed=False):
         return ""
 
 
-fdierhfi
+#git ch 
