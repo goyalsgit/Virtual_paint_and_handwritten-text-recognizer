@@ -4,6 +4,31 @@ Air-gesture drawing app that converts the drawn handwriting into text with TrOCR
 
 Hand tracking runs entirely in the browser via MediaPipe. The Python backend receives the cleaned canvas and runs OCR.
 
+Project explanation:
+- [Markdown source](docs/project-explanation.md)
+- [PDF version](docs/project-explanation.pdf)
+
+Additional documentation:
+- [Backend documentation](docs/backend-documentation.md)
+- [Colab training guide](docs/training/colab-trocr-guide.md)
+- [Fine-tuning steps](docs/training/fine-tuning-steps.md)
+
+---
+
+## Project structure
+
+```text
+air-drawing-app/
+├── backend/              # FastAPI server and OCR pipeline
+├── frontend/             # Browser UI and MediaPipe hand tracking
+├── training/             # Training and prediction scripts
+├── docs/                 # Project, backend, and training documentation
+├── artifacts/            # OCR debug output and local trained models
+├── data/                 # Collected samples and generated manifests
+├── hand_landmarker.task  # MediaPipe hand tracking model
+└── README.md
+```
+
 ---
 
 ## Run locally
@@ -17,6 +42,7 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Open **http://localhost:8000**.
+Use a modern browser and allow camera permission. Opening the app from a file path or non-localhost host can break webcam access.
 
 ---
 
