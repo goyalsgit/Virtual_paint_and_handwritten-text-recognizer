@@ -1,3 +1,4 @@
+import os
 import base64
 import csv
 import json
@@ -51,11 +52,10 @@ PROJECT_ROOT = BASE_DIR.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 STATIC_DIR = FRONTEND_DIR
 MODEL_PATH = PROJECT_ROOT / "hand_landmarker.task"
-DATASET_DIR = PROJECT_ROOT / "data" / "collected"
+DATASET_DIR = PROJECT_ROOT / "custom_dataset"
 OCR_DEBUG_DIR = PROJECT_ROOT / "artifacts" / "ocr_debug"
-WORDS_DIR = DATASET_DIR / "words"
-MANIFEST_PATH = DATASET_DIR / "words_manifest.jsonl"
-CSV_PATH = DATASET_DIR / "words_manifest.csv"
+IMAGES_DIR = DATASET_DIR / "images"
+CSV_PATH = DATASET_DIR / "labels.csv"
 
 # Allow requests from any origin (Vercel frontend, localhost dev)
 app.add_middleware(
@@ -114,6 +114,32 @@ def save_debug_ocr_bundle(source_canvas, ocr_input, mode: str, preprocessed: boo
     )
 
 
+class SampleSaveRequest(BaseModel):
+    image: str
+    text: str
+    source: str = "browser"
+    mode: str = "word"
+
+
+def append_manifest_row(image_path: Path, text: str):
+    DATASET_DIR.mkdir(parents=True, exist_ok=True)
+
+    row = {
+        "image": image_path.name,
+        "text": text,
+    }
+
+    csv_exists = CSV_PATH.exists()
+    with CSV_PATH.open("a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["image", "text"],
+        )
+        if not csv_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+
 
 
 @app.get("/")
@@ -145,6 +171,35 @@ async def hand_landmarker():
     return {"error": "Model file not found"}
 
 
+@app.post("/api/samples")
+async def save_sample(payload: SampleSaveRequest):
+    text = payload.text.strip()
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Sample label is required")
+
+    image = base64_to_cv2(payload.image)
+    if image is None:
+        raise HTTPException(status_code=400, detail="Could not decode sample image")
+
+    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S%f")
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    image_path = IMAGES_DIR / f"{timestamp}.png"
+
+    save_debug_image(image, image_path)
+    append_manifest_row(
+        image_path=image_path,
+        text=text,
+    )
+
+    return {
+        "success": True,
+        "image": image_path.name,
+        "text": text,
+        "mode": payload.mode,
+    }
+
+
 
 
 @app.websocket("/ws")
@@ -156,15 +211,15 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Receive message from browser
             data = await websocket.receive_text()
-            msg  = json.loads(data)
+            msg = json.loads(data)
 
             if msg.get("type") == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
                 continue
 
             if msg.get("type") == "ocr":
-                mode     = msg.get("mode", "sentence")
-                b64_img  = msg.get("image", "")
+                mode = msg.get("mode", "sentence")
+                b64_img = msg.get("image", "")
                 source_b64 = msg.get("source_image", "")
                 preprocessed = bool(msg.get("preprocessed", False))
 
@@ -216,5 +271,5 @@ async def websocket_endpoint(websocket: WebSocket):
                 "type": "error",
                 "message": str(e)
             }))
-        except:
+        except Exception:
             pass

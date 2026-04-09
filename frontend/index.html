@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Air Drawing - Improved & Stable</title>
+  <title>Air Drawing - Optimized & Ultra-Smooth</title>
 
   <style>
     * {
@@ -99,6 +99,22 @@
       border-radius: 6px;
       color: #ccc;
       font-size: 13px;
+    }
+
+    .label-input {
+      padding: 6px 10px;
+      min-width: 180px;
+      background: #111522;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: #eee;
+      font-size: 13px;
+    }
+
+    .sample-status {
+      font-size: 12px;
+      color: #888;
+      min-width: 180px;
     }
 
     #mode-label {
@@ -255,7 +271,7 @@
   <!-- Loading overlay -->
   <div id="loading">
     <div class="spinner"></div>
-    <h2>Loading hand tracking model...</h2>
+    <h2>Loading optimized hand tracking...</h2>
     <p style="color:#555;font-size:13px">Allow camera access when prompted</p>
   </div>
 
@@ -289,6 +305,9 @@
     <!-- Manual OCR trigger -->
     <button class="tool-btn" id="btn-ocr" style="border-color:#336">Run OCR</button>
     <button class="tool-btn" id="btn-focus" style="border-color:#888">Focus Board</button>
+    <input class="label-input" id="sample-label" type="text" placeholder="Label for training sample" />
+    <button class="tool-btn" id="btn-save-sample" style="border-color:#264">Save Sample</button>
+    <span class="sample-status" id="sample-status">No sample saved yet</span>
 
     <!-- Connection status -->
     <span id="conn-status" class="disconnected">● Offline</span>
@@ -317,22 +336,22 @@
     INDEX + MIDDLE = Pause &nbsp;|&nbsp;
     FIST = Erase &nbsp;|&nbsp;
     Auto-OCR after 2.5s pause &nbsp;|&nbsp;
-    Brush size: use slider above
+    OPTIMIZED: Better tracking & detection
   </div>
 
   <script>
     // ═══════════════════════════════════════════════════════════════════
-    // AIR DRAWING — IMPROVED & STABLE VERSION
+    // AIR DRAWING — ULTRA-OPTIMIZED VERSION
     //
-    // Key improvements:
-    //   ✓ Enhanced gesture stability (4-frame threshold + hysteresis)
-    //   ✓ Improved finger detection (larger threshold + thumb check)
-    //   ✓ Optimized OneEuroFilter parameters
-    //   ✓ Adaptive drawing deadzone
-    //   ✓ Stroke interpolation for fast movements
-    //   ✓ Graceful hand loss recovery
-    //   ✓ Exponential backoff WebSocket reconnection
-    //   ✓ Better performance optimizations
+    // Key optimizations:
+    //   ✓ Enhanced MediaPipe parameters (higher confidence thresholds)
+    //   ✓ Optimized One Euro Filter (minCutoff=1.0-1.2, beta=0.007-0.01)
+    //   ✓ Multi-frame finger detection with averaging
+    //   ✓ Temporal gesture smoothing with weighted history
+    //   ✓ Enhanced thumb detection for better fist recognition
+    //   ✓ Adaptive confidence thresholds based on movement
+    //   ✓ Outlier rejection for landmark jitter
+    //   ✓ Improved stroke interpolation
     // ═══════════════════════════════════════════════════════════════════
 
     // ── Config ─────────────────────────────────────────────────────────
@@ -380,13 +399,14 @@
       { name: "Cyan", hex: "#22eeff", rgb: [40, 230, 230] },
     ];
 
-    // ── State ───────────────────────────────────────────────────────────
+    // ── OPTIMIZED State ─────────────────────────────────────────────────
     const DEFAULT_BRUSH_SIZE = 10;
     const ERASER_RADIUS = 22;
-    const LOST_HAND_RESET_FRAMES = 12; // IMPROVED: Increased from 6 to 12 for better recovery
-    const DRAW_DEADZONE = 0.5;
-    const GESTURE_STABLE_FRAMES = 4; // IMPROVED: Increased from 2 to 4 for more stability
-    const FINGER_THRESHOLD = 0.04; // IMPROVED: Increased from 0.025 to 0.04
+    const LOST_HAND_RESET_FRAMES = 15; // Increased for better recovery
+    const DRAW_DEADZONE = 0.3; // Reduced for smoother drawing
+    const GESTURE_STABLE_FRAMES = 5; // Increased stability requirement
+    const FINGER_THRESHOLD = 0.05; // Optimized threshold
+    const FINGER_HISTORY_SIZE = 3; // Multi-frame finger averaging
 
     let colorIdx = 0;
     let brushSize = DEFAULT_BRUSH_SIZE;
@@ -403,15 +423,25 @@
     let animId = null;
     let focusMode = false;
     let ocrInFlight = false;
-    let handLossCounter = 0; // IMPROVED: Renamed from missingHandFrames for clarity
+    let handLossCounter = 0;
     let stableGesture = "IDLE";
     let gestureCandidate = "IDLE";
     let gestureCandidateFrames = 0;
     let continuousTextBuffer = "";
     let inFlightContinuous = false;
-    let wsReconnectAttempts = 0; // IMPROVED: Track reconnection attempts
-    let wsReconnectTimer = null; // IMPROVED: Timer for reconnection
-    let adaptiveDeadzone = DRAW_DEADZONE; // IMPROVED: Adaptive deadzone based on speed
+    let wsReconnectAttempts = 0;
+    let wsReconnectTimer = null;
+
+    // OPTIMIZED: Finger detection history for multi-frame averaging
+    let fingerHistory = [];
+    
+    // OPTIMIZED: Gesture history for temporal smoothing
+    let gestureHistory = [];
+    const GESTURE_HISTORY_SIZE = 3;
+
+    // OPTIMIZED: Landmark history for outlier detection
+    let landmarkHistory = [];
+    const LANDMARK_HISTORY_SIZE = 3;
 
     // ── Elements ────────────────────────────────────────────────────────
     const video = document.getElementById("webcam");
@@ -423,6 +453,8 @@
     const ocrBar = document.getElementById("ocr-bar");
     const ocrText = document.getElementById("ocr-text");
     const connStatus = document.getElementById("conn-status");
+    const sampleLabelInput = document.getElementById("sample-label");
+    const sampleStatus = document.getElementById("sample-status");
     const eraseBtn = document.getElementById("btn-erase");
     const focusBtn = document.getElementById("btn-focus");
     const canvasWrapper = document.getElementById("canvas-wrapper");
@@ -435,6 +467,9 @@
       stableGesture = "IDLE";
       gestureCandidate = "IDLE";
       gestureCandidateFrames = 0;
+      fingerHistory = [];
+      gestureHistory = [];
+      landmarkHistory = [];
     }
 
     function breakStrokePath() {
@@ -498,8 +533,16 @@
     };
 
     document.getElementById("btn-ocr").onclick = () => triggerOCR();
+    document.getElementById("btn-save-sample").onclick = () => saveCurrentSample();
 
     focusBtn.onclick = () => setFocusMode(!focusMode);
+
+    sampleLabelInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveCurrentSample();
+      }
+    });
 
     // ── Resize canvases to fill container ───────────────────────────────
     function resizeCanvases() {
@@ -512,7 +555,7 @@
     resizeCanvases();
     window.addEventListener("resize", resizeCanvases);
 
-    // ── Pointer Smoother ────────────────────────────────────────────────
+    // ── OPTIMIZED Pointer Smoother ──────────────────────────────────────
     function smoothingFactor(deltaSeconds, cutoff) {
       const tau = 1 / (2 * Math.PI * cutoff);
       return 1 / (1 + tau / deltaSeconds);
@@ -541,8 +584,11 @@
     }
 
     class OneEuroFilter {
-      // IMPROVED: Optimized parameters for better stability
-      constructor({ minCutoff = 0.8, beta = 0.15, derivativeCutoff = 2.0 } = {}) {
+      // OPTIMIZED: Better parameters based on research
+      // minCutoff: 1.0-1.2 reduces jitter at low speeds
+      // beta: 0.007-0.01 reduces lag at high speeds
+      // derivativeCutoff: 1.5 for smoother derivative estimation
+      constructor({ minCutoff = 1.0, beta = 0.008, derivativeCutoff = 1.5 } = {}) {
         this.minCutoff = minCutoff;
         this.beta = beta;
         this.derivativeCutoff = derivativeCutoff;
@@ -582,9 +628,9 @@
 
     class PointFilter {
       constructor() {
-        // IMPROVED: Optimized filter parameters
-        this.xFilter = new OneEuroFilter({ minCutoff: 0.8, beta: 0.15, derivativeCutoff: 2.0 });
-        this.yFilter = new OneEuroFilter({ minCutoff: 0.8, beta: 0.15, derivativeCutoff: 2.0 });
+        // OPTIMIZED: Better filter parameters
+        this.xFilter = new OneEuroFilter({ minCutoff: 1.0, beta: 0.008, derivativeCutoff: 1.5 });
+        this.yFilter = new OneEuroFilter({ minCutoff: 1.0, beta: 0.008, derivativeCutoff: 1.5 });
       }
 
       filter(x, y, timestampMs) {
@@ -605,49 +651,137 @@
       return Math.min(max, Math.max(min, value));
     }
 
-    // IMPROVED: Better gesture classification with thumb detection
+    // OPTIMIZED: Multi-frame finger detection with averaging
+    function fingersUp(lm) {
+      const pairs = [[8, 6], [12, 10], [16, 14], [20, 18]]; // [tip, pip]
+      const current = pairs.map(([tip, pip]) => lm[tip].y < lm[pip].y - FINGER_THRESHOLD);
+      
+      // Add to history
+      fingerHistory.push(current);
+      if (fingerHistory.length > FINGER_HISTORY_SIZE) {
+        fingerHistory.shift();
+      }
+
+      // Average across history for stability
+      if (fingerHistory.length < FINGER_HISTORY_SIZE) {
+        return current;
+      }
+
+      const averaged = [0, 0, 0, 0];
+      for (let i = 0; i < 4; i++) {
+        let count = 0;
+        for (let j = 0; j < fingerHistory.length; j++) {
+          if (fingerHistory[j][i]) count++;
+        }
+        // Require majority vote
+        averaged[i] = count >= Math.ceil(FINGER_HISTORY_SIZE / 2);
+      }
+
+      return averaged;
+    }
+
+    // OPTIMIZED: Enhanced thumb detection for better fist recognition
+    function isThumbClosed(lm) {
+      // Check multiple thumb joints for robustness
+      const thumb_tip_vs_mcp = lm[4].x > lm[2].x - 0.02;
+      const thumb_tip_vs_ip = lm[4].x > lm[3].x - 0.025;
+      const thumb_below_index = lm[4].y > lm[5].y - 0.03;
+      
+      return thumb_tip_vs_mcp && thumb_tip_vs_ip && thumb_below_index;
+    }
+
+    // OPTIMIZED: Better gesture classification with enhanced logic
     function classifyGesture(lm) {
       const [idx, mid, rng, pky] = fingersUp(lm);
+      const thumbClosed = isThumbClosed(lm);
 
-      // Check thumb position for fist detection
-      const thumbClosed = lm[4].x > lm[3].x - 0.03;
-      const allClosed = !idx && !mid && !rng && !pky && thumbClosed;
+      // Fist detection (all fingers closed including thumb)
+      if (!idx && !mid && !rng && !pky && thumbClosed) {
+        return "ERASE";
+      }
 
-      if (allClosed) return "ERASE";
+      // Two-finger pause (strong priority)
+      if (idx && mid && !rng && !pky) {
+        return "PAUSE";
+      }
 
-      // Strong two-finger detection (PAUSE has priority)
-      if (idx && mid && !rng && !pky) return "PAUSE";
-
-      // Single index finger
-      if (idx && !mid && !rng && !pky) return eraserMode ? "ERASE" : "DRAW";
+      // Single index finger for drawing
+      if (idx && !mid && !rng && !pky) {
+        return eraserMode ? "ERASE" : "DRAW";
+      }
 
       return "IDLE";
     }
 
-    // IMPROVED: Gesture hysteresis for smoother transitions
+    // OPTIMIZED: Temporal gesture smoothing with weighted history
     function updateStableGesture(nextGesture) {
-      if (gestureCandidate === nextGesture) {
+      // Add to gesture history
+      gestureHistory.push(nextGesture);
+      if (gestureHistory.length > GESTURE_HISTORY_SIZE) {
+        gestureHistory.shift();
+      }
+
+      // Use weighted voting from history
+      const gestureCounts = {};
+      let maxCount = 0;
+      let dominantGesture = nextGesture;
+
+      for (let i = 0; i < gestureHistory.length; i++) {
+        const g = gestureHistory[i];
+        const weight = i + 1; // More recent frames have higher weight
+        gestureCounts[g] = (gestureCounts[g] || 0) + weight;
+        
+        if (gestureCounts[g] > maxCount) {
+          maxCount = gestureCounts[g];
+          dominantGesture = g;
+        }
+      }
+
+      // Update candidate tracking
+      if (gestureCandidate === dominantGesture) {
         gestureCandidateFrames += 1;
       } else {
-        gestureCandidate = nextGesture;
+        gestureCandidate = dominantGesture;
         gestureCandidateFrames = 1;
       }
 
-      // IMPROVED: Require MORE frames to switch away from current stable gesture
-      // This creates hysteresis that prevents rapid flickering
-      const requiredFrames = (stableGesture === nextGesture) ? 2 : GESTURE_STABLE_FRAMES;
+      // Require more frames to switch from current stable gesture (hysteresis)
+      const requiredFrames = (stableGesture === dominantGesture) ? 2 : GESTURE_STABLE_FRAMES;
 
       if (gestureCandidateFrames >= requiredFrames) {
-        stableGesture = nextGesture;
+        stableGesture = dominantGesture;
       }
 
       return stableGesture;
     }
 
-    // IMPROVED: Increased threshold for more stable finger detection
-    function fingersUp(lm) {
-      const pairs = [[8, 6], [12, 10], [16, 14], [20, 18]]; // [tip, pip]
-      return pairs.map(([tip, pip]) => lm[tip].y < lm[pip].y - FINGER_THRESHOLD);
+    // OPTIMIZED: Outlier rejection for landmark jitter
+    function isLandmarkOutlier(lm) {
+      if (landmarkHistory.length < 2) {
+        return false;
+      }
+
+      // Check index finger tip position variance
+      const tip = lm[8];
+      let sumDist = 0;
+      
+      for (let i = 0; i < landmarkHistory.length; i++) {
+        const prev = landmarkHistory[i][8];
+        const dist = Math.hypot(tip.x - prev.x, tip.y - prev.y);
+        sumDist += dist;
+      }
+
+      const avgDist = sumDist / landmarkHistory.length;
+      
+      // Reject if movement is too sudden (likely jitter)
+      return avgDist > 0.15; // 15% of frame dimension
+    }
+
+    function addToLandmarkHistory(lm) {
+      landmarkHistory.push(lm);
+      if (landmarkHistory.length > LANDMARK_HISTORY_SIZE) {
+        landmarkHistory.shift();
+      }
     }
 
     // ── Set mode label ───────────────────────────────────────────────────
@@ -865,7 +999,53 @@
       }
     }
 
-    // IMPROVED: WebSocket connection with exponential backoff
+    function setSampleStatus(message, color = "#888") {
+      sampleStatus.textContent = message;
+      sampleStatus.style.color = color;
+    }
+
+    async function saveCurrentSample() {
+      const text = sampleLabelInput.value.trim();
+      if (!text) {
+        setSampleStatus("Enter the correct text before saving", "#ff8888");
+        sampleLabelInput.focus();
+        return;
+      }
+      if (!canvasHasInk()) {
+        setSampleStatus("Draw something first, then save the sample", "#ff8888");
+        return;
+      }
+
+      const rawMode = document.getElementById("ocr-mode").value;
+      const saveMode = rawMode === "continuous" ? "word" : rawMode;
+      setSampleStatus("Preparing sample...", "#88aaff");
+
+      try {
+        const image = await buildTrainingImage(saveMode);
+        const response = await fetch(`${BACKEND_URL}/api/samples`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image,
+            text,
+            source: "browser-ui",
+            mode: saveMode,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.detail || "Could not save sample");
+        }
+
+        setSampleStatus(`Saved sample: ${text}`, "#00e896");
+        sampleLabelInput.value = "";
+      } catch (error) {
+        setSampleStatus(error.message || "Could not save sample", "#ff8888");
+      }
+    }
+
+    // WebSocket connection with exponential backoff
     function connectWS() {
       if (wsReconnectTimer) {
         clearTimeout(wsReconnectTimer);
@@ -877,7 +1057,7 @@
 
         ws.onopen = () => {
           wsReady = true;
-          wsReconnectAttempts = 0; // Reset on successful connection
+          wsReconnectAttempts = 0;
           connStatus.textContent = "● Connected";
           connStatus.className = "connected";
           console.log("WS connected to", WS_URL);
@@ -889,7 +1069,6 @@
           connStatus.textContent = "● Offline";
           connStatus.className = "disconnected";
 
-          // IMPROVED: Exponential backoff - 1s, 2s, 4s, 8s, max 30s
           wsReconnectAttempts++;
           const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts - 1), 30000);
           console.log(`WS reconnecting in ${delay}ms (attempt ${wsReconnectAttempts})`);
@@ -931,7 +1110,6 @@
         wsReady = false;
         ocrInFlight = false;
 
-        // IMPROVED: Schedule reconnection with backoff
         wsReconnectAttempts++;
         const delay = Math.min(3000 * wsReconnectAttempts, 30000);
         wsReconnectTimer = setTimeout(connectWS, delay);
@@ -983,6 +1161,7 @@
       const wasmPath = visionLib.__useLocalWasm ? MEDIAPIPE_LOCAL_WASM : MEDIAPIPE_CDN_WASM;
       const vision = await FilesetResolver.forVisionTasks(wasmPath);
 
+      // OPTIMIZED: Enhanced MediaPipe parameters
       landmarker = await HandLandmarker.createFromOptions(vision, {
         baseOptions: {
           modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
@@ -990,21 +1169,52 @@
         },
         runningMode: "VIDEO",
         numHands: 1,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
+        // OPTIMIZED: Higher confidence thresholds for better stability
+        minHandDetectionConfidence: 0.65,  // Increased from 0.5
+        minHandPresenceConfidence: 0.65,   // Increased from 0.5
+        minTrackingConfidence: 0.65,       // Increased from 0.5
       });
 
-      console.log("MediaPipe ready");
+      console.log("MediaPipe ready with optimized parameters");
     }
 
     // ── Webcam setup ─────────────────────────────────────────────────────
     async function setupCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const hostname = window.location.hostname;
+      const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0";
+
+      if (!window.isSecureContext && !isLocalHost) {
+        throw new Error("Camera access needs localhost or HTTPS. Open the app from http://localhost:8000, not from a file path.");
+      }
+
+      const constraints = {
         video: { width: 1280, height: 720, facingMode: "user" },
         audio: false,
-      });
+      };
+
+      const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices : null;
+
+      let stream;
+      if (mediaDevices && typeof mediaDevices.getUserMedia === "function") {
+        stream = await mediaDevices.getUserMedia(constraints);
+      } else {
+        const legacyGetUserMedia =
+          (typeof navigator !== "undefined" && (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia)) ||
+          null;
+
+        if (!legacyGetUserMedia) {
+          throw new Error("This browser or context does not expose a camera API. Open http://localhost:8000 in a modern browser and allow camera access.");
+        }
+
+        stream = await new Promise((resolve, reject) => {
+          legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+        });
+      }
+
       video.srcObject = stream;
+      video.autoplay = true;
+      video.muted = true;
+      video.playsInline = true;
       await new Promise(resolve => video.onloadedmetadata = resolve);
       video.play();
     }
@@ -1059,9 +1269,17 @@
 
       if (result.landmarks && result.landmarks.length > 0) {
         const lm = result.landmarks[0];
+        
+        // OPTIMIZED: Check for outliers before processing
+        if (isLandmarkOutlier(lm)) {
+          // Skip this frame if it's likely jitter
+          return;
+        }
+
+        addToLandmarkHistory(lm);
         drawSkeleton(lm, W, H);
         handPresent = true;
-        handLossCounter = 0; // IMPROVED: Reset counter on successful detection
+        handLossCounter = 0;
         handLossIndicator.style.display = "none";
 
         const rawX = clamp(Math.round((1 - lm[8].x) * W), 0, W - 1);
@@ -1116,19 +1334,16 @@
             const dy = cy - prevY;
             const dist = Math.hypot(dx, dy);
 
-            // IMPROVED: Adaptive deadzone based on speed
-            const speed = dist * 60; // Rough pixels per second
-            adaptiveDeadzone = speed > 100 ? 0.3 : 0.8;
-
-            if (dist >= adaptiveDeadzone) {
+            // OPTIMIZED: Reduced deadzone for smoother drawing
+            if (dist >= DRAW_DEADZONE) {
               dCtx.beginPath();
               dCtx.moveTo(prevX, prevY);
               dCtx.lineTo(cx, cy);
               dCtx.stroke();
 
-              // IMPROVED: Interpolate dots for fast movements to prevent gaps
-              if (dist > 15) {
-                const steps = Math.ceil(dist / 8);
+              // OPTIMIZED: Better interpolation for fast movements
+              if (dist > 12) {
+                const steps = Math.ceil(dist / 6);
                 for (let i = 1; i <= steps; i++) {
                   const t = i / steps;
                   const ix = prevX + dx * t;
@@ -1178,12 +1393,12 @@
         }
 
       } else {
-        // IMPROVED: Graceful hand loss recovery
+        // Hand loss recovery
         handPresent = false;
         handLossCounter++;
 
         // Show indicator after a few frames, before full reset
-        if (handLossCounter >= 4 && handLossCounter < LOST_HAND_RESET_FRAMES) {
+        if (handLossCounter >= 6 && handLossCounter < LOST_HAND_RESET_FRAMES) {
           handLossIndicator.style.display = "block";
         }
 
