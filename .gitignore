@@ -7,8 +7,7 @@ drawing.png
 # OCR debug images (auto-generated, can be large)
 artifacts/ocr_debug/
 
-# Collected training samples (large, user-generated)
-data/collected/
+# Generated train/val/test manifests
 data/manifests/
 
 # Fine-tuned model checkpoints (large; add back if you want to ship them)
