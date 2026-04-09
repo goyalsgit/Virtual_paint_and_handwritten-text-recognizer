@@ -285,6 +285,8 @@
 
     <!-- Tools -->
     <button class="tool-btn" id="btn-erase">Eraser</button>
+    <button class="tool-btn" id="btn-undo">Undo</button>
+    <button class="tool-btn" id="btn-redo">Redo</button>
     <button class="tool-btn danger" id="btn-clear">Clear</button>
 
     <!-- Brush size -->
@@ -407,6 +409,7 @@
     const GESTURE_STABLE_FRAMES = 5; // Increased stability requirement
     const FINGER_THRESHOLD = 0.05; // Optimized threshold
     const FINGER_HISTORY_SIZE = 3; // Multi-frame finger averaging
+    const MAX_UNDO_STEPS = 20;
 
     let colorIdx = 0;
     let brushSize = DEFAULT_BRUSH_SIZE;
@@ -431,6 +434,9 @@
     let inFlightContinuous = false;
     let wsReconnectAttempts = 0;
     let wsReconnectTimer = null;
+    let activeCanvasAction = "IDLE";
+    let undoStack = [];
+    let redoStack = [];
 
     // OPTIMIZED: Finger detection history for multi-frame averaging
     let fingerHistory = [];
@@ -456,6 +462,8 @@
     const sampleLabelInput = document.getElementById("sample-label");
     const sampleStatus = document.getElementById("sample-status");
     const eraseBtn = document.getElementById("btn-erase");
+    const undoBtn = document.getElementById("btn-undo");
+    const redoBtn = document.getElementById("btn-redo");
     const focusBtn = document.getElementById("btn-focus");
     const canvasWrapper = document.getElementById("canvas-wrapper");
     const handLossIndicator = document.getElementById("hand-loss-indicator");
@@ -470,6 +478,7 @@
       fingerHistory = [];
       gestureHistory = [];
       landmarkHistory = [];
+      activeCanvasAction = "IDLE";
     }
 
     function breakStrokePath() {
@@ -517,8 +526,11 @@
     eraseBtn.onclick = function () {
       setEraserMode(!eraserMode);
     };
+    undoBtn.onclick = () => void undoLastAction();
+    redoBtn.onclick = () => void redoLastAction();
 
     document.getElementById("btn-clear").onclick = () => {
+      pushUndoSnapshot();
       dCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
       ocrBar.style.display = "none";
       ocrText.textContent = "";
@@ -680,23 +692,24 @@
       return averaged;
     }
 
-    // OPTIMIZED: Enhanced thumb detection for better fist recognition
     function isThumbClosed(lm) {
-      // Check multiple thumb joints for robustness
-      const thumb_tip_vs_mcp = lm[4].x > lm[2].x - 0.02;
-      const thumb_tip_vs_ip = lm[4].x > lm[3].x - 0.025;
-      const thumb_below_index = lm[4].y > lm[5].y - 0.03;
-      
-      return thumb_tip_vs_mcp && thumb_tip_vs_ip && thumb_below_index;
+      const thumbFoldedAcrossPalm = lm[4].x > lm[3].x - 0.01;
+      const thumbNearPalm = Math.abs(lm[4].x - lm[2].x) < 0.12;
+      const thumbBelowIndexBase = lm[4].y > lm[5].y - 0.01;
+      return thumbFoldedAcrossPalm && thumbNearPalm && thumbBelowIndexBase;
     }
 
-    // OPTIMIZED: Better gesture classification with enhanced logic
+    function isFullFist(lm) {
+      const fingerPairs = [[8, 6], [12, 10], [16, 14], [20, 18]];
+      const foldedFingers = fingerPairs.every(([tip, pip]) => lm[tip].y >= lm[pip].y - 0.005);
+      return foldedFingers && isThumbClosed(lm);
+    }
+
     function classifyGesture(lm) {
       const [idx, mid, rng, pky] = fingersUp(lm);
-      const thumbClosed = isThumbClosed(lm);
 
-      // Fist detection (all fingers closed including thumb)
-      if (!idx && !mid && !rng && !pky && thumbClosed) {
+      // Full fist only should erase
+      if (isFullFist(lm)) {
         return "ERASE";
       }
 
@@ -707,7 +720,7 @@
 
       // Single index finger for drawing
       if (idx && !mid && !rng && !pky) {
-        return eraserMode ? "ERASE" : "DRAW";
+        return "DRAW";
       }
 
       return "IDLE";
@@ -796,6 +809,188 @@
       const entry = map[m] || map.IDLE;
       modeLabel.textContent = entry.text;
       modeLabel.style.color = entry.color;
+    }
+
+    function resolvePointerAction(gesture) {
+      if (gesture === "ERASE") {
+        return "ERASE";
+      }
+      if (gesture === "DRAW") {
+        return eraserMode ? "ERASE" : "DRAW";
+      }
+      if (gesture === "PAUSE") {
+        return "PAUSE";
+      }
+      return "IDLE";
+    }
+
+    function pushUndoSnapshot() {
+      try {
+        undoStack.push(drawCanvas.toDataURL("image/png"));
+        if (undoStack.length > MAX_UNDO_STEPS) {
+          undoStack.shift();
+        }
+        redoStack = [];
+      } catch (error) {
+        console.warn("Could not save undo snapshot:", error);
+      }
+    }
+
+    function restoreCanvasFromDataUrl(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          dCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+          dCtx.globalCompositeOperation = "source-over";
+          dCtx.drawImage(img, 0, 0, drawCanvas.width, drawCanvas.height);
+          resolve();
+        };
+        img.onerror = () => reject(new Error("Could not restore canvas state"));
+        img.src = dataUrl;
+      });
+    }
+
+    async function undoLastAction() {
+      if (!undoStack.length) {
+        modeLabel.textContent = "NOTHING TO UNDO";
+        modeLabel.style.color = "#ffcc66";
+        return;
+      }
+
+      try {
+        redoStack.push(drawCanvas.toDataURL("image/png"));
+        if (redoStack.length > MAX_UNDO_STEPS) {
+          redoStack.shift();
+        }
+      } catch (error) {
+        console.warn("Could not save redo snapshot:", error);
+      }
+
+      const snapshot = undoStack.pop();
+      try {
+        await restoreCanvasFromDataUrl(snapshot);
+        breakStrokePath();
+        activeCanvasAction = "IDLE";
+        setMode("IDLE");
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+
+    async function redoLastAction() {
+      if (!redoStack.length) {
+        modeLabel.textContent = "NOTHING TO REDO";
+        modeLabel.style.color = "#ffcc66";
+        return;
+      }
+
+      try {
+        undoStack.push(drawCanvas.toDataURL("image/png"));
+        if (undoStack.length > MAX_UNDO_STEPS) {
+          undoStack.shift();
+        }
+      } catch (error) {
+        console.warn("Could not save undo snapshot:", error);
+      }
+
+      const snapshot = redoStack.pop();
+      try {
+        await restoreCanvasFromDataUrl(snapshot);
+        breakStrokePath();
+        activeCanvasAction = "IDLE";
+        setMode("IDLE");
+      } catch (error) {
+        console.warn(error);
+      }
+    }
+
+    function beginCanvasAction(action) {
+      if (action !== "DRAW" && action !== "ERASE") {
+        activeCanvasAction = action;
+        return;
+      }
+
+      if (activeCanvasAction !== action) {
+        pushUndoSnapshot();
+      }
+      activeCanvasAction = action;
+    }
+
+    function eraseAtPoint(cx, cy, nowSec) {
+      beginCanvasAction("ERASE");
+      setMode("ERASE");
+      breakStrokePath();
+      dCtx.globalCompositeOperation = "destination-out";
+      dCtx.beginPath();
+      dCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
+      dCtx.fill();
+      dCtx.globalCompositeOperation = "source-over";
+      oCtx.strokeStyle = "#3355ff";
+      oCtx.lineWidth = 2;
+      oCtx.beginPath();
+      oCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
+      oCtx.stroke();
+      lastDrawT = nowSec;
+    }
+
+    function drawAtPoint(cx, cy, nowSec) {
+      beginCanvasAction("DRAW");
+      setMode("DRAW");
+      dCtx.globalCompositeOperation = "source-over";
+
+      const col = COLORS[colorIdx].rgb;
+      dCtx.strokeStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+      dCtx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+      dCtx.lineWidth = brushSize;
+      dCtx.lineCap = "round";
+      dCtx.lineJoin = "round";
+
+      if (prevX === null) {
+        prevX = cx;
+        prevY = cy;
+      }
+
+      const dx = cx - prevX;
+      const dy = cy - prevY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist >= DRAW_DEADZONE) {
+        dCtx.beginPath();
+        dCtx.moveTo(prevX, prevY);
+        dCtx.lineTo(cx, cy);
+        dCtx.stroke();
+
+        if (dist > 12) {
+          const steps = Math.ceil(dist / 6);
+          for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const ix = prevX + dx * t;
+            const iy = prevY + dy * t;
+            dCtx.beginPath();
+            dCtx.arc(ix, iy, brushSize / 2, 0, Math.PI * 2);
+            dCtx.fill();
+          }
+        } else {
+          dCtx.beginPath();
+          dCtx.arc(cx, cy, brushSize / 2, 0, Math.PI * 2);
+          dCtx.fill();
+        }
+
+        prevX = cx;
+        prevY = cy;
+      }
+
+      lastDrawT = nowSec;
+
+      oCtx.strokeStyle = "#000";
+      oCtx.lineWidth = 2;
+      oCtx.beginPath();
+      oCtx.arc(cx, cy, brushSize / 2 + 2, 0, Math.PI * 2);
+      oCtx.stroke();
+      oCtx.fillStyle = `rgb(${col.join(",")})`;
+      oCtx.beginPath();
+      oCtx.arc(cx, cy, brushSize / 2, 0, Math.PI * 2);
+      oCtx.fill();
     }
 
     // ── Auto OCR logic ───────────────────────────────────────────────────
@@ -1286,98 +1481,17 @@
         const rawY = clamp(Math.round(lm[8].y * H), 0, H - 1);
         const [cx, cy] = pointerFilter.filter(rawX, rawY, now);
         const gesture = updateStableGesture(classifyGesture(lm));
+        const action = resolvePointerAction(gesture);
 
         // ── Gesture → draw ───────────────────────────────────────────
-        if (gesture === "ERASE") {
-          setMode("ERASE");
-          breakStrokePath();
-          dCtx.globalCompositeOperation = "destination-out";
-          dCtx.beginPath();
-          dCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
-          dCtx.fill();
-          dCtx.globalCompositeOperation = "source-over";
-          oCtx.strokeStyle = "#3355ff";
-          oCtx.lineWidth = 2;
-          oCtx.beginPath();
-          oCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
-          oCtx.stroke();
-          lastDrawT = nowSec;
+        if (action === "ERASE") {
+          eraseAtPoint(cx, cy, nowSec);
 
-        } else if (gesture === "DRAW") {
-          if (eraserMode) {
-            setMode("ERASE");
-            breakStrokePath();
-            dCtx.globalCompositeOperation = "destination-out";
-            dCtx.beginPath();
-            dCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
-            dCtx.fill();
-            dCtx.globalCompositeOperation = "source-over";
-            oCtx.strokeStyle = "#3355ff";
-            oCtx.lineWidth = 2;
-            oCtx.beginPath();
-            oCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
-            oCtx.stroke();
-            lastDrawT = nowSec;
-          } else {
-            setMode("DRAW");
-            const col = COLORS[colorIdx].rgb;
-            dCtx.strokeStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-            dCtx.lineWidth = brushSize;
-            dCtx.lineCap = "round";
-            dCtx.lineJoin = "round";
+        } else if (action === "DRAW") {
+          drawAtPoint(cx, cy, nowSec);
 
-            if (prevX === null) {
-              prevX = cx; prevY = cy;
-            }
-
-            const dx = cx - prevX;
-            const dy = cy - prevY;
-            const dist = Math.hypot(dx, dy);
-
-            // OPTIMIZED: Reduced deadzone for smoother drawing
-            if (dist >= DRAW_DEADZONE) {
-              dCtx.beginPath();
-              dCtx.moveTo(prevX, prevY);
-              dCtx.lineTo(cx, cy);
-              dCtx.stroke();
-
-              // OPTIMIZED: Better interpolation for fast movements
-              if (dist > 12) {
-                const steps = Math.ceil(dist / 6);
-                for (let i = 1; i <= steps; i++) {
-                  const t = i / steps;
-                  const ix = prevX + dx * t;
-                  const iy = prevY + dy * t;
-                  dCtx.beginPath();
-                  dCtx.arc(ix, iy, brushSize / 2, 0, Math.PI * 2);
-                  dCtx.fill();
-                }
-              } else {
-                // Single dot at tip
-                dCtx.beginPath();
-                dCtx.arc(cx, cy, brushSize / 2, 0, Math.PI * 2);
-                dCtx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-                dCtx.fill();
-              }
-
-              prevX = cx;
-              prevY = cy;
-            }
-            lastDrawT = nowSec;
-
-            // Cursor feedback
-            oCtx.strokeStyle = "#000";
-            oCtx.lineWidth = 2;
-            oCtx.beginPath();
-            oCtx.arc(cx, cy, brushSize / 2 + 2, 0, Math.PI * 2);
-            oCtx.stroke();
-            oCtx.fillStyle = `rgb(${COLORS[colorIdx].rgb.join(",")})`;
-            oCtx.beginPath();
-            oCtx.arc(cx, cy, brushSize / 2, 0, Math.PI * 2);
-            oCtx.fill();
-          }
-
-        } else if (gesture === "PAUSE") {
+        } else if (action === "PAUSE") {
+          activeCanvasAction = "PAUSE";
           setMode("PAUSE");
           breakStrokePath();
           oCtx.strokeStyle = "#00cccc";
@@ -1388,6 +1502,7 @@
           oCtx.stroke();
 
         } else {
+          activeCanvasAction = "IDLE";
           setMode("IDLE");
           breakStrokePath();
         }
