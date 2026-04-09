@@ -51,11 +51,10 @@ PROJECT_ROOT = BASE_DIR.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 STATIC_DIR = FRONTEND_DIR
 MODEL_PATH = PROJECT_ROOT / "hand_landmarker.task"
-DATASET_DIR = PROJECT_ROOT / "data" / "collected"
+DATASET_DIR = PROJECT_ROOT / "custom_dataset"
 OCR_DEBUG_DIR = PROJECT_ROOT / "artifacts" / "ocr_debug"
-WORDS_DIR = DATASET_DIR / "words"
-MANIFEST_PATH = DATASET_DIR / "words_manifest.jsonl"
-CSV_PATH = DATASET_DIR / "words_manifest.csv"
+IMAGES_DIR = DATASET_DIR / "images"
+CSV_PATH = DATASET_DIR / "labels.csv"
 
 # Allow requests from any origin (Vercel frontend, localhost dev)
 app.add_middleware(
@@ -117,30 +116,23 @@ def save_debug_ocr_bundle(source_canvas, ocr_input, mode: str, preprocessed: boo
 class SampleSaveRequest(BaseModel):
     image: str
     text: str
-    split: str = "train"
     source: str = "browser"
     mode: str = "word"
 
 
-def append_manifest_row(image_path: Path, text: str, split: str, source: str, created_at: str):
+def append_manifest_row(image_path: Path, text: str):
     DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
     row = {
-        "image": str(image_path.relative_to(PROJECT_ROOT)),
+        "image": image_path.name,
         "text": text,
-        "split": split,
-        "source": source,
-        "created_at": created_at,
     }
-
-    with MANIFEST_PATH.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=True) + "\n")
 
     csv_exists = CSV_PATH.exists()
     with CSV_PATH.open("a", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["image", "text", "split", "source", "created_at"],
+            fieldnames=["image", "text"],
         )
         if not csv_exists:
             writer.writeheader()
@@ -181,40 +173,29 @@ async def hand_landmarker():
 @app.post("/api/samples")
 async def save_sample(payload: SampleSaveRequest):
     text = payload.text.strip()
-    split = payload.split.strip().lower()
 
     if not text:
         raise HTTPException(status_code=400, detail="Sample label is required")
-
-    if split not in {"train", "val", "test"}:
-        raise HTTPException(status_code=400, detail="Split must be train, val, or test")
 
     image = base64_to_cv2(payload.image)
     if image is None:
         raise HTTPException(status_code=400, detail="Could not decode sample image")
 
     timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S%f")
-    created_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    target_dir = WORDS_DIR / split
-    target_dir.mkdir(parents=True, exist_ok=True)
-    image_path = target_dir / f"{timestamp}.png"
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    image_path = IMAGES_DIR / f"{timestamp}.png"
 
     save_debug_image(image, image_path)
     append_manifest_row(
         image_path=image_path,
         text=text,
-        split=split,
-        source=payload.source.strip() or "browser",
-        created_at=created_at,
     )
 
     return {
         "success": True,
-        "image": str(image_path.relative_to(PROJECT_ROOT)),
+        "image": image_path.name,
         "text": text,
-        "split": split,
         "mode": payload.mode,
-        "created_at": created_at,
     }
 
 

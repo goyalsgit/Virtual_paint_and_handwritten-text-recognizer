@@ -306,11 +306,6 @@
     <button class="tool-btn" id="btn-ocr" style="border-color:#336">Run OCR</button>
     <button class="tool-btn" id="btn-focus" style="border-color:#888">Focus Board</button>
     <input class="label-input" id="sample-label" type="text" placeholder="Label for training sample" />
-    <select class="ocr-select" id="sample-split">
-      <option value="train">Save: Train</option>
-      <option value="val">Save: Val</option>
-      <option value="test">Save: Test</option>
-    </select>
     <button class="tool-btn" id="btn-save-sample" style="border-color:#264">Save Sample</button>
     <span class="sample-status" id="sample-status">No sample saved yet</span>
 
@@ -459,7 +454,6 @@
     const ocrText = document.getElementById("ocr-text");
     const connStatus = document.getElementById("conn-status");
     const sampleLabelInput = document.getElementById("sample-label");
-    const sampleSplitSelect = document.getElementById("sample-split");
     const sampleStatus = document.getElementById("sample-status");
     const eraseBtn = document.getElementById("btn-erase");
     const focusBtn = document.getElementById("btn-focus");
@@ -1034,7 +1028,6 @@
           body: JSON.stringify({
             image,
             text,
-            split: sampleSplitSelect.value,
             source: "browser-ui",
             mode: saveMode,
           }),
@@ -1045,7 +1038,7 @@
           throw new Error(result.detail || "Could not save sample");
         }
 
-        setSampleStatus(`Saved ${result.split} sample: ${text}`, "#00e896");
+        setSampleStatus(`Saved sample: ${text}`, "#00e896");
         sampleLabelInput.value = "";
       } catch (error) {
         setSampleStatus(error.message || "Could not save sample", "#ff8888");

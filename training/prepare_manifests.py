@@ -1,18 +1,28 @@
 import argparse
+import csv
 import json
 import random
 from pathlib import Path
 
 
-def load_jsonl(path):
+def load_labels_csv(path):
     rows = []
     if not path.exists():
         return rows
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                rows.append(json.loads(line))
+    images_dir = path.parent / "images"
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            image_name = (row.get("image") or "").strip()
+            text = (row.get("text") or "").strip()
+            if not image_name or not text:
+                continue
+            rows.append(
+                {
+                    "image": str(images_dir / image_name),
+                    "text": text,
+                }
+            )
     return rows
 
 
@@ -27,8 +37,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input",
-        default="data/collected/words_manifest.jsonl",
-        help="Collected dataset manifest path",
+        default="custom_dataset/labels.csv",
+        help="Master labels CSV path",
     )
     parser.add_argument(
         "--output-dir",
@@ -41,27 +51,21 @@ def main():
     args = parser.parse_args()
 
     input_path = Path(args.input)
-    rows = load_jsonl(input_path)
+    rows = load_labels_csv(input_path)
     if not rows:
         raise SystemExit(f"No samples found in {input_path}")
 
-    explicit = {"train": [], "val": [], "test": []}
-    unsplit = []
-    for row in rows:
-        split = row.get("split")
-        if split in explicit:
-            explicit[split].append({"image": row["image"], "text": row["text"]})
-        else:
-            unsplit.append({"image": row["image"], "text": row["text"]})
-
-    random.Random(args.seed).shuffle(unsplit)
-    n_total = len(unsplit)
+    shuffled = list(rows)
+    random.Random(args.seed).shuffle(shuffled)
+    n_total = len(shuffled)
     n_test = int(n_total * args.test_ratio)
     n_val = int(n_total * args.val_ratio)
 
-    explicit["test"].extend(unsplit[:n_test])
-    explicit["val"].extend(unsplit[n_test:n_test + n_val])
-    explicit["train"].extend(unsplit[n_test + n_val:])
+    explicit = {
+        "test": shuffled[:n_test],
+        "val": shuffled[n_test:n_test + n_val],
+        "train": shuffled[n_test + n_val:],
+    }
 
     output_dir = Path(args.output_dir)
     write_jsonl(output_dir / "train.jsonl", explicit["train"])
