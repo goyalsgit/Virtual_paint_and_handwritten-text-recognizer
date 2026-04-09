@@ -9,8 +9,8 @@ __pycache__/
 # Large auto-generated files
 artifacts/ocr_debug/
 
-# Training data (collected samples)
-data/collected/
+# Generated train/val/test manifests
+data/manifests/
 
 # Local dev notes
 *.md
