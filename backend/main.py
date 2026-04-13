@@ -149,6 +149,13 @@ async def root():
         return FileResponse(index_path)
     return {"status": "Air Drawing OCR Server running"}
 
+@app.get("/pdfviewer")
+async def pdfviewer():
+    viewer_path = FRONTEND_DIR / "gesturepdfviewer.html"
+    if viewer_path.exists():
+        return FileResponse(viewer_path)
+    return {"error": "PDF Viewer not found"}
+
 
 @app.get("/health")
 async def health():
