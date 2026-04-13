@@ -11,9 +11,21 @@ from PIL import Image
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
+DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_finetuned"
+FALLBACK_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
 DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
 OCR_DEBUG_DIR = PROJECT_ROOT / "artifacts" / "ocr_debug"
+
+
+def _has_model_files(directory):
+    if not directory.exists():
+        return False
+    model_files = (
+        "model.safetensors",
+        "pytorch_model.bin",
+        "tf_model.h5",
+    )
+    return any((directory / file_name).exists() for file_name in model_files)
 
 
 def _ensure_bgr(img):
@@ -319,11 +331,21 @@ def _clean_prediction(text, mode="sentence"):
 
 
 def _preferred_trocr_model_ref():
+    """Resolve which TrOCR checkpoint to use.
+
+    Priority order:
+      1. AIRDRAW_OCR_MODEL env var (explicit override)
+      2. artifacts/trocr_finetuned (preferred fine-tuned checkpoint)
+      3. artifacts/trocr_airdraw/best (legacy training output)
+      4. microsoft/trocr-large-handwritten (Hugging Face fallback)
+    """
     explicit = os.getenv("AIRDRAW_OCR_MODEL", "").strip()
     if explicit:
         return explicit
-    if DEFAULT_TROCR_MODEL_DIR.exists():
+    if _has_model_files(DEFAULT_TROCR_MODEL_DIR):
         return str(DEFAULT_TROCR_MODEL_DIR)
+    if _has_model_files(FALLBACK_TROCR_MODEL_DIR):
+        return str(FALLBACK_TROCR_MODEL_DIR)
     return DEFAULT_TROCR_MODEL_ID
 
 
