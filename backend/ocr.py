@@ -1,5 +1,4 @@
-import os   
-import os   
+import os
 import re
 import time
 from functools import lru_cache
@@ -11,7 +10,8 @@ from PIL import Image
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
+DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_finetuned"
+FALLBACK_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
 DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
 OCR_DEBUG_DIR = PROJECT_ROOT / "artifacts" / "ocr_debug"
 
@@ -67,6 +67,8 @@ def crop_to_content(img, pad=24):
 
     working = _ensure_bgr(img)
     mask = _ink_mask(img)
+    if mask is None:
+        return None
 
     coords = np.column_stack(np.where(mask.astype(np.uint8)))
     if coords.size == 0:
@@ -233,11 +235,28 @@ class _TrOCREngine:
             if self.device == "cuda":
                 model_kwargs["torch_dtype"] = torch.float16
 
+            # Load processor from local checkpoint
             self.processor = TrOCRProcessor.from_pretrained(self.model_ref)
-            self.model = VisionEncoderDecoderModel.from_pretrained(
-                self.model_ref,
-                **model_kwargs,
-            )
+
+            # Try loading model from the same ref. If the local dir has config
+            # but no weights, fall back to loading weights from HuggingFace.
+            try:
+                self.model = VisionEncoderDecoderModel.from_pretrained(
+                    self.model_ref,
+                    **model_kwargs,
+                )
+            except (OSError, EnvironmentError):
+                # Local dir has config/tokenizer but no model weights.
+                # Load model weights from the HuggingFace hub instead.
+                print(
+                    f"Local checkpoint '{self.model_ref}' has no model weights, "
+                    f"loading weights from '{DEFAULT_TROCR_MODEL_ID}'"
+                )
+                self.model = VisionEncoderDecoderModel.from_pretrained(
+                    DEFAULT_TROCR_MODEL_ID,
+                    **model_kwargs,
+                )
+
             self.model.to(self.device)
             self.model.eval()
             self.available = True
@@ -295,7 +314,7 @@ class _TrOCREngine:
             return ""
 
         _save_debug_prepared_images(prepared_debug_images, mode)
-        joined = " ".join(outputs) if mode == "sentence" else " ".join(outputs)
+        joined = " ".join(outputs)
         return _clean_prediction(joined, mode=mode)
 
 
@@ -318,16 +337,40 @@ def _clean_prediction(text, mode="sentence"):
     return cleaned
 
 
+def _has_model_files(directory):
+    """Check if a directory contains actual model files, not just .gitkeep."""
+    if not directory.exists():
+        return False
+    model_files = (
+        "model.safetensors",
+        "pytorch_model.bin",
+        "tf_model.h5",
+        "config.json",
+    )
+    return any((directory / f).exists() for f in model_files)
+
+
 def _preferred_trocr_model_ref():
+    """Resolve which model checkpoint to use.
+
+    Priority order:
+      1. AIRDRAW_OCR_MODEL env var (explicit override)
+      2. artifacts/trocr_finetuned  (fine-tuned checkpoint)
+      3. artifacts/trocr_airdraw/best  (training output)
+      4. microsoft/trocr-large-handwritten  (HuggingFace hub)
+    """
     explicit = os.getenv("AIRDRAW_OCR_MODEL", "").strip()
     if explicit:
         return explicit
-    if DEFAULT_TROCR_MODEL_DIR.exists():
+    if _has_model_files(DEFAULT_TROCR_MODEL_DIR):
         return str(DEFAULT_TROCR_MODEL_DIR)
+    if _has_model_files(FALLBACK_TROCR_MODEL_DIR):
+        return str(FALLBACK_TROCR_MODEL_DIR)
     return DEFAULT_TROCR_MODEL_ID
 
 
 def _local_trocr_checkpoint_dir():
+    """Return the path of the primary local checkpoint directory."""
     return str(DEFAULT_TROCR_MODEL_DIR)
 
 
@@ -384,7 +427,3 @@ def run_ocr(canvas, mode="sentence", preprocessed=False):
         return engine.predict(canvas, mode=mode, preprocessed=preprocessed)
     except Exception:
         return ""
-
-
-#git ch 
-#git change
