@@ -79,6 +79,8 @@ def crop_to_content(img, pad=24):
 
     working = _ensure_bgr(img)
     mask = _ink_mask(img)
+    if mask is None:
+        return None
 
     coords = np.column_stack(np.where(mask.astype(np.uint8)))
     if coords.size == 0:
@@ -246,10 +248,21 @@ class _TrOCREngine:
                 model_kwargs["torch_dtype"] = torch.float16
 
             self.processor = TrOCRProcessor.from_pretrained(self.model_ref)
-            self.model = VisionEncoderDecoderModel.from_pretrained(
-                self.model_ref,
-                **model_kwargs,
-            )
+
+            try:
+                self.model = VisionEncoderDecoderModel.from_pretrained(
+                    self.model_ref,
+                    **model_kwargs,
+                )
+            except (OSError, EnvironmentError):
+                print(
+                    f"Local checkpoint '{self.model_ref}' has no model weights, "
+                    f"loading weights from '{DEFAULT_TROCR_MODEL_ID}'"
+                )
+                self.model = VisionEncoderDecoderModel.from_pretrained(
+                    DEFAULT_TROCR_MODEL_ID,
+                    **model_kwargs,
+                )
             self.model.to(self.device)
             self.model.eval()
             self.available = True
@@ -406,7 +419,3 @@ def run_ocr(canvas, mode="sentence", preprocessed=False):
         return engine.predict(canvas, mode=mode, preprocessed=preprocessed)
     except Exception:
         return ""
-
-
-#git ch 
-#git change
