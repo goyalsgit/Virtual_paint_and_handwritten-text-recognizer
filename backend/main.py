@@ -151,7 +151,7 @@ async def root():
 
 @app.get("/pdfviewer")
 async def pdfviewer():
-    viewer_path = FRONTEND_DIR / "gesturepdfviewer.html"
+    viewer_path = FRONTEND_DIR / "pdf-viewer.html"
     if viewer_path.exists():
         return FileResponse(viewer_path)
     return {"error": "PDF Viewer not found"}
