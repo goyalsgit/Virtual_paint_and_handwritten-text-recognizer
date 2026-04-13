@@ -158,9 +158,8 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
       cursor: crosshair;
+      transform-origin: top left;
     }
 
     #overlay-canvas {
@@ -306,6 +305,7 @@
 
     <!-- Manual OCR trigger -->
     <button class="tool-btn" id="btn-ocr" style="border-color:#336">Run OCR</button>
+    <button class="tool-btn" id="btn-ocr-all" style="border-color:#446;background:#1a1a30">OCR All</button>
     <button class="tool-btn" id="btn-focus" style="border-color:#888">Focus Board</button>
     <input class="label-input" id="sample-label" type="text" placeholder="Label for training sample" />
     <button class="tool-btn" id="btn-save-sample" style="border-color:#264">Save Sample</button>
@@ -313,6 +313,9 @@
 
     <!-- Connection status -->
     <span id="conn-status" class="disconnected">● Offline</span>
+    <span id="pan-indicator" style="font-size:11px;color:#555;padding:3px 8px;background:#1a1a2e;border-radius:4px;">Canvas: 0% → 0% ↓</span>
+    <button class="tool-btn" id="btn-reset-view" style="border-color:#555;font-size:12px;">Reset View</button>
+    <button class="tool-btn" id="btn-download" style="border-color:#264;font-size:12px;">⬇ Download</button>
 
     <!-- Mode label -->
     <div id="mode-label">◌ READY</div>
@@ -335,10 +338,10 @@
   <!-- Status bar -->
   <div id="status-bar">
     INDEX finger = Draw &nbsp;|&nbsp;
-    INDEX + MIDDLE = Pause &nbsp;|&nbsp;
+    INDEX + MIDDLE = Lift pen &nbsp;|&nbsp;
     FIST = Erase &nbsp;|&nbsp;
-    Auto-OCR after 2.5s pause &nbsp;|&nbsp;
-    OPTIMIZED: Better tracking & detection
+    INDEX + MIDDLE + RING = Pan canvas &nbsp;|&nbsp;
+    Auto-OCR after 2.5s pause
   </div>
 
   <script>
@@ -411,7 +414,14 @@
     const FINGER_HISTORY_SIZE = 3; // Multi-frame finger averaging
     const MAX_UNDO_STEPS = 20;
 
-    let colorIdx = 0;
+    // ── Scrollable canvas config ─────────────────────────────────────────
+    const VIRTUAL_W = 3840;
+    const VIRTUAL_H = 2160;
+    let panX = 0;
+    let panY = 0;
+    let panStartX = null;
+    let panStartY = null;
+
     let brushSize = DEFAULT_BRUSH_SIZE;
     let eraserMode = false;
     let prevX = null;
@@ -531,7 +541,7 @@
 
     document.getElementById("btn-clear").onclick = () => {
       pushUndoSnapshot();
-      dCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+      dCtx.clearRect(0, 0, VIRTUAL_W, VIRTUAL_H);
       ocrBar.style.display = "none";
       ocrText.textContent = "";
       continuousTextBuffer = "";
@@ -545,7 +555,14 @@
     };
 
     document.getElementById("btn-ocr").onclick = () => triggerOCR();
+    document.getElementById("btn-ocr-all").onclick = () => triggerOCRAll();
     document.getElementById("btn-save-sample").onclick = () => saveCurrentSample();
+    document.getElementById("btn-reset-view").onclick = () => {
+      panX = 0;
+      panY = 0;
+      applyPan();
+    };
+    document.getElementById("btn-download").onclick = () => downloadCanvas();
 
     focusBtn.onclick = () => setFocusMode(!focusMode);
 
@@ -556,13 +573,34 @@
       }
     });
 
+    // ── Pan helpers ──────────────────────────────────────────────────────
+    function applyPan() {
+      drawCanvas.style.transform = `translate(${-panX}px, ${-panY}px)`;
+      updatePanIndicator();
+    }
+
+    function updatePanIndicator() {
+      const vpW = overCanvas.width  || canvasWrapper.clientWidth;
+      const vpH = overCanvas.height || canvasWrapper.clientHeight;
+      const pctX = Math.round((panX / (VIRTUAL_W - vpW)) * 100) || 0;
+      const pctY = Math.round((panY / (VIRTUAL_H - vpH)) * 100) || 0;
+      const el = document.getElementById("pan-indicator");
+      if (el) el.textContent = `Canvas: ${pctX}% → ${pctY}% ↓`;
+    }
+
     // ── Resize canvases to fill container ───────────────────────────────
     function resizeCanvases() {
       const wrapper = document.getElementById("canvas-wrapper");
       const W = wrapper.clientWidth;
       const H = wrapper.clientHeight;
-      drawCanvas.width = W; drawCanvas.height = H;
-      overCanvas.width = W; overCanvas.height = H;
+      // draw canvas is the large virtual surface — keep its pixel size fixed
+      drawCanvas.width = VIRTUAL_W;
+      drawCanvas.height = VIRTUAL_H;
+      // overlay canvas matches the visible viewport
+      overCanvas.width = W;
+      overCanvas.height = H;
+      // apply current pan offset so the view stays consistent after resize
+      applyPan();
     }
     resizeCanvases();
     window.addEventListener("resize", resizeCanvases);
@@ -708,17 +746,22 @@
     function classifyGesture(lm) {
       const [idx, mid, rng, pky] = fingersUp(lm);
 
-      // Full fist only should erase
+      // Full fist = erase (check first — most distinct)
       if (isFullFist(lm)) {
         return "ERASE";
       }
 
-      // Two-finger pause (strong priority)
-      if (idx && mid && !rng && !pky) {
-        return "PAUSE";
+      // 3 fingers up (index + middle + ring), pinky down = pan
+      if (idx && mid && rng && !pky) {
+        return "PAN";
       }
 
-      // Single index finger for drawing
+      // Index + middle = lift pen (break stroke, no drawing)
+      if (idx && mid && !rng && !pky) {
+        return "LIFT";
+      }
+
+      // Single index finger = draw
       if (idx && !mid && !rng && !pky) {
         return "DRAW";
       }
@@ -801,10 +844,11 @@
     function setMode(m) {
       mode = m;
       const map = {
-        DRAW: { text: "● DRAWING", color: "#00dd55" },
-        ERASE: { text: "◌ ERASING", color: "#2255ff" },
-        PAUSE: { text: "◎ PAUSED", color: "#00cccc" },
-        IDLE: { text: "◌ READY", color: "#555" },
+        DRAW:  { text: "● DRAWING",  color: "#00dd55" },
+        ERASE: { text: "◌ ERASING",  color: "#2255ff" },
+        LIFT:  { text: "✦ PEN UP",   color: "#00cccc" },
+        PAN:   { text: "✊ PANNING",  color: "#ffaa00" },
+        IDLE:  { text: "◌ READY",    color: "#555"    },
       };
       const entry = map[m] || map.IDLE;
       modeLabel.textContent = entry.text;
@@ -812,15 +856,10 @@
     }
 
     function resolvePointerAction(gesture) {
-      if (gesture === "ERASE") {
-        return "ERASE";
-      }
-      if (gesture === "DRAW") {
-        return eraserMode ? "ERASE" : "DRAW";
-      }
-      if (gesture === "PAUSE") {
-        return "PAUSE";
-      }
+      if (gesture === "ERASE") return "ERASE";
+      if (gesture === "DRAW")  return eraserMode ? "ERASE" : "DRAW";
+      if (gesture === "LIFT")  return "LIFT";
+      if (gesture === "PAN")   return "PAN";
       return "IDLE";
     }
 
@@ -920,9 +959,12 @@
       beginCanvasAction("ERASE");
       setMode("ERASE");
       breakStrokePath();
+      // offset to virtual canvas coordinates
+      const vx = cx + panX;
+      const vy = cy + panY;
       dCtx.globalCompositeOperation = "destination-out";
       dCtx.beginPath();
-      dCtx.arc(cx, cy, ERASER_RADIUS, 0, Math.PI * 2);
+      dCtx.arc(vx, vy, ERASER_RADIUS, 0, Math.PI * 2);
       dCtx.fill();
       dCtx.globalCompositeOperation = "source-over";
       oCtx.strokeStyle = "#3355ff";
@@ -936,6 +978,9 @@
     function drawAtPoint(cx, cy, nowSec) {
       beginCanvasAction("DRAW");
       setMode("DRAW");
+      // offset to virtual canvas coordinates
+      const vx = cx + panX;
+      const vy = cy + panY;
       dCtx.globalCompositeOperation = "source-over";
 
       const col = COLORS[colorIdx].rgb;
@@ -946,18 +991,18 @@
       dCtx.lineJoin = "round";
 
       if (prevX === null) {
-        prevX = cx;
-        prevY = cy;
+        prevX = vx;
+        prevY = vy;
       }
 
-      const dx = cx - prevX;
-      const dy = cy - prevY;
+      const dx = vx - prevX;
+      const dy = vy - prevY;
       const dist = Math.hypot(dx, dy);
 
       if (dist >= DRAW_DEADZONE) {
         dCtx.beginPath();
         dCtx.moveTo(prevX, prevY);
-        dCtx.lineTo(cx, cy);
+        dCtx.lineTo(vx, vy);
         dCtx.stroke();
 
         if (dist > 12) {
@@ -972,16 +1017,17 @@
           }
         } else {
           dCtx.beginPath();
-          dCtx.arc(cx, cy, brushSize / 2, 0, Math.PI * 2);
+          dCtx.arc(vx, vy, brushSize / 2, 0, Math.PI * 2);
           dCtx.fill();
         }
 
-        prevX = cx;
-        prevY = cy;
+        prevX = vx;
+        prevY = vy;
       }
 
       lastDrawT = nowSec;
 
+      // cursor overlay is always in screen space
       oCtx.strokeStyle = "#000";
       oCtx.lineWidth = 2;
       oCtx.beginPath();
@@ -994,9 +1040,19 @@
     }
 
     // ── Auto OCR logic ───────────────────────────────────────────────────
+    // Fires only when:
+    //   1. No drawing activity for 3.5s
+    //   2. Hand has been absent/idle for at least 2s (not mid-writing)
+    //   3. At least 6s since last OCR run
+    let lastHandActiveT = 0; // updated every frame a hand is detected
+
     function checkAutoOCR() {
       const now = Date.now() / 1000;
-      if (!ocrInFlight && lastDrawT > 0 && (now - lastDrawT) > 2.5 && (now - lastOcrT) > 5.0) {
+      const inactiveLongEnough = lastDrawT > 0 && (now - lastDrawT) > 3.5;
+      const handGoneEnough = (now - lastHandActiveT) > 2.0;
+      const cooldownPassed = (now - lastOcrT) > 6.0;
+
+      if (!ocrInFlight && inactiveLongEnough && handGoneEnough && cooldownPassed) {
         if (canvasHasInk()) {
           triggerOCR();
           lastDrawT = 0;
@@ -1005,17 +1061,19 @@
     }
 
     function canvasHasInk() {
-      const data = dCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height).data;
+      const vpW = overCanvas.width;
+      const vpH = overCanvas.height;
+      const data = dCtx.getImageData(panX, panY, vpW, vpH).data;
       for (let i = 3; i < data.length; i += 4) {
-        if (data[i] > 20) {
-          return true;
-        }
+        if (data[i] > 20) return true;
       }
       return false;
     }
 
     function buildOcrImage() {
-      const src = dCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+      const vpW = overCanvas.width;
+      const vpH = overCanvas.height;
+      const src = dCtx.getImageData(panX, panY, vpW, vpH);
       const out = new ImageData(src.width, src.height);
 
       for (let i = 0; i < src.data.length; i += 4) {
@@ -1039,14 +1097,133 @@
     }
 
     function buildRawCanvasImage() {
+      const vpW = overCanvas.width;
+      const vpH = overCanvas.height;
       const offscreen = document.createElement("canvas");
-      offscreen.width = drawCanvas.width;
-      offscreen.height = drawCanvas.height;
+      offscreen.width = vpW;
+      offscreen.height = vpH;
+      const offscreenCtx = offscreen.getContext("2d");
+      offscreenCtx.fillStyle = "#ffffff";
+      offscreenCtx.fillRect(0, 0, vpW, vpH);
+      // draw only the visible viewport region from the virtual canvas
+      offscreenCtx.drawImage(drawCanvas, panX, panY, vpW, vpH, 0, 0, vpW, vpH);
+      return offscreen.toDataURL("image/png");
+    }
+
+    // ── Download canvas ──────────────────────────────────────────────────
+    function downloadCanvas() {
+      // Find the bounding box of all ink on the virtual canvas
+      const src = dCtx.getImageData(0, 0, VIRTUAL_W, VIRTUAL_H);
+      const data = src.data;
+
+      let minX = VIRTUAL_W, minY = VIRTUAL_H, maxX = -1, maxY = -1;
+      for (let y = 0; y < VIRTUAL_H; y++) {
+        for (let x = 0; x < VIRTUAL_W; x++) {
+          if (data[(y * VIRTUAL_W + x) * 4 + 3] > 20) {
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (maxX < 0) {
+        alert("Nothing to download — draw something first.");
+        return;
+      }
+
+      // Add padding around ink
+      const pad = 40;
+      minX = Math.max(0, minX - pad);
+      minY = Math.max(0, minY - pad);
+      maxX = Math.min(VIRTUAL_W - 1, maxX + pad);
+      maxY = Math.min(VIRTUAL_H - 1, maxY + pad);
+
+      const cropW = maxX - minX + 1;
+      const cropH = maxY - minY + 1;
+
+      const offscreen = document.createElement("canvas");
+      offscreen.width = cropW;
+      offscreen.height = cropH;
+      const offCtx = offscreen.getContext("2d");
+      offCtx.fillStyle = "#ffffff";
+      offCtx.fillRect(0, 0, cropW, cropH);
+      offCtx.drawImage(drawCanvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+
+      const link = document.createElement("a");
+      link.download = `airdraw_${new Date().toISOString().slice(0,19).replace(/[:T]/g, "-")}.png`;
+      link.href = offscreen.toDataURL("image/png");
+      link.click();
+    }
+
+    // ── OCR All: scan the full virtual canvas for ink ────────────────────
+    function buildOcrImageAll() {
+      // Read the entire virtual canvas
+      const src = dCtx.getImageData(0, 0, VIRTUAL_W, VIRTUAL_H);
+      const out = new ImageData(src.width, src.height);
+
+      let hasInk = false;
+      for (let i = 0; i < src.data.length; i += 4) {
+        const alpha = src.data[i + 3];
+        if (alpha > 20) {
+          out.data[i] = 0;
+          out.data[i + 1] = 0;
+          out.data[i + 2] = 0;
+          out.data[i + 3] = alpha;
+          hasInk = true;
+        }
+      }
+
+      if (!hasInk) return null;
+
+      const offscreen = document.createElement("canvas");
+      offscreen.width = src.width;
+      offscreen.height = src.height;
       const offscreenCtx = offscreen.getContext("2d");
       offscreenCtx.fillStyle = "#ffffff";
       offscreenCtx.fillRect(0, 0, offscreen.width, offscreen.height);
-      offscreenCtx.drawImage(drawCanvas, 0, 0);
+      offscreenCtx.putImageData(out, 0, 0);
       return offscreen.toDataURL("image/png");
+    }
+
+    async function triggerOCRAll() {
+      if (ocrInFlight) return;
+      if (!wsReady) {
+        ocrText.textContent = "Not connected to server";
+        ocrBar.style.display = "block";
+        return;
+      }
+
+      const b64 = buildOcrImageAll();
+      if (!b64) {
+        ocrText.textContent = "Nothing written on canvas";
+        ocrBar.style.display = "block";
+        return;
+      }
+
+      try {
+        ocrInFlight = true;
+        inFlightContinuous = false;
+        const mode_val = document.getElementById("ocr-mode").value === "continuous"
+          ? "sentence"
+          : document.getElementById("ocr-mode").value;
+
+        lastOcrT = Date.now() / 1000;
+        ws.send(JSON.stringify({
+          type: "ocr",
+          mode: mode_val,
+          image: b64,
+          source_image: b64,
+          preprocessed: true,
+        }));
+        ocrText.textContent = "Scanning full canvas...";
+        ocrBar.style.display = "block";
+      } catch (error) {
+        ocrInFlight = false;
+        ocrText.textContent = `OCR All failed: ${error.message}`;
+        ocrBar.style.display = "block";
+      }
     }
 
     function getOcrTargetSize(mode, cropped) {
@@ -1475,6 +1652,7 @@
         drawSkeleton(lm, W, H);
         handPresent = true;
         handLossCounter = 0;
+        lastHandActiveT = Date.now() / 1000;
         handLossIndicator.style.display = "none";
 
         const rawX = clamp(Math.round((1 - lm[8].x) * W), 0, W - 1);
@@ -1485,23 +1663,54 @@
 
         // ── Gesture → draw ───────────────────────────────────────────
         if (action === "ERASE") {
+          panStartX = null; panStartY = null;
           eraseAtPoint(cx, cy, nowSec);
 
         } else if (action === "DRAW") {
+          panStartX = null; panStartY = null;
           drawAtPoint(cx, cy, nowSec);
 
-        } else if (action === "PAUSE") {
-          activeCanvasAction = "PAUSE";
-          setMode("PAUSE");
+        } else if (action === "PAN") {
           breakStrokePath();
+          activeCanvasAction = "PAN";
+          setMode("PAN");
+
+          // use palm center (landmark 9) for pan — more stable than fingertip
+          const palmScreenX = clamp(Math.round((1 - lm[9].x) * W), 0, W - 1);
+          const palmScreenY = clamp(Math.round(lm[9].y * H), 0, H - 1);
+
+          if (panStartX !== null) {
+            const dx = palmScreenX - panStartX;
+            const dy = palmScreenY - panStartY;
+            panX = Math.max(0, Math.min(VIRTUAL_W - W, panX - dx));
+            panY = Math.max(0, Math.min(VIRTUAL_H - H, panY - dy));
+            applyPan();
+          }
+          panStartX = palmScreenX;
+          panStartY = palmScreenY;
+
+          // draw open-palm indicator on overlay
+          oCtx.strokeStyle = "#ffaa00";
+          oCtx.lineWidth = 2;
+          oCtx.beginPath();
+          oCtx.arc(cx, cy, 18, 0, Math.PI * 2);
+          oCtx.stroke();
+
+        } else if (action === "LIFT") {
+          panStartX = null; panStartY = null;
+          activeCanvasAction = "LIFT";
+          setMode("LIFT");
+          breakStrokePath();
+          // small crosshair cursor to show pen is lifted
           oCtx.strokeStyle = "#00cccc";
           oCtx.lineWidth = 2;
           oCtx.beginPath();
-          oCtx.moveTo(cx - 12, cy); oCtx.lineTo(cx + 12, cy);
-          oCtx.moveTo(cx, cy - 12); oCtx.lineTo(cx, cy + 12);
+          oCtx.moveTo(cx - 10, cy); oCtx.lineTo(cx + 10, cy);
+          oCtx.moveTo(cx, cy - 10); oCtx.lineTo(cx, cy + 10);
           oCtx.stroke();
 
         } else {
+          panStartX = null; panStartY = null;
           activeCanvasAction = "IDLE";
           setMode("IDLE");
           breakStrokePath();
@@ -1511,6 +1720,8 @@
         // Hand loss recovery
         handPresent = false;
         handLossCounter++;
+        panStartX = null;
+        panStartY = null;
 
         // Show indicator after a few frames, before full reset
         if (handLossCounter >= 6 && handLossCounter < LOST_HAND_RESET_FRAMES) {

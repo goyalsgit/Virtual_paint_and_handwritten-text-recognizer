@@ -11,7 +11,7 @@ from PIL import Image
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
+DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_finetuned"
 DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
 OCR_DEBUG_DIR = PROJECT_ROOT / "artifacts" / "ocr_debug"
 
