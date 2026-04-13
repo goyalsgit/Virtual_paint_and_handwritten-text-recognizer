@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from ocr import predict_text_from_base64
+from fastapi.staticfiles import StaticFiles
 
 try:
     from .ocr import get_ocr_backend_status, run_ocr
@@ -61,6 +63,7 @@ CSV_PATH = DATASET_DIR / "labels.csv"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -68,6 +71,9 @@ app.add_middleware(
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+BASE_DIRR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIRR, "frontend")), name="static")
 
 def base64_to_cv2(b64_string: str):
     """Convert base64 PNG string -> OpenCV image, preserving alpha when present."""
@@ -199,7 +205,13 @@ async def save_sample(payload: SampleSaveRequest):
         "mode": payload.mode,
     }
 
+class OCRRequest(BaseModel):
+    image: str
 
+@app.post("/ocr")
+def ocr_endpoint(req: OCRRequest):
+    text = predict_text_from_base64(req.image)
+    return {"text": text}
 
 
 @app.websocket("/ws")

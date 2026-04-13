@@ -3,1338 +3,2473 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gesture PDF Viewer</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <style>
-    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap");
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>GesturePDF Pro — Gesture-Controlled PDF Viewer</title>
+  <meta name="description"
+    content="Advanced gesture-controlled PDF viewer with smooth scrolling, highlighting, pen drawing, and notes — powered by MediaPipe hand tracking." />
 
-    * {
-      box-sizing: border-box;
+  <!-- Google Fonts -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;600&display=swap"
+    rel="stylesheet" />
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+
+  <style>
+    /* ══════════════════════════════════════════════════════════════
+       RESET & VARIABLES
+       ══════════════════════════════════════════════════════════════ */
+    *,
+    *::before,
+    *::after {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
+      user-select: none;
     }
 
     :root {
-      --bg: #081018;
-      --bg-accent: #10253a;
-      --panel: rgba(8, 18, 28, 0.92);
-      --panel-strong: #0d1b28;
-      --panel-soft: #122637;
-      --border: rgba(166, 196, 214, 0.16);
-      --text: #f4f7fb;
-      --muted: #8ea3b7;
-      --accent: #ff7a18;
-      --accent-soft: #ffd6ae;
-      --aqua: #55d6ff;
-      --green: #55e5a4;
-      --yellow: #ffd166;
-      --pink: #ff8fa3;
-      --red: #ff6b6b;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+      --bg: #08090d;
+      --bg2: #0d0f14;
+      --surface: #12141a;
+      --surface2: #1a1d27;
+      --surface3: #222633;
+      --border: rgba(255, 255, 255, 0.06);
+      --border2: rgba(255, 255, 255, 0.1);
+      --accent: #6366f1;
+      --accent-soft: rgba(99, 102, 241, 0.15);
+      --accent2: #22d3ee;
+      --text: #e2e8f0;
+      --text2: #cbd5e1;
+      --muted: #64748b;
+      --muted2: #475569;
+      --success: #4ade80;
+      --danger: #f43f5e;
+      --warn: #fbbf24;
+      --purple: #a78bfa;
+      --pink: #f472b6;
+      --radius: 10px;
+      --radius-lg: 16px;
+      --transition: 0.15s ease;
     }
 
     body {
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at top left, rgba(85, 214, 255, 0.16), transparent 28%),
-        radial-gradient(circle at top right, rgba(255, 122, 24, 0.18), transparent 24%),
-        linear-gradient(180deg, #081018 0%, #0a1621 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
       color: var(--text);
-      font-family: "Space Grotesk", sans-serif;
-      overflow: hidden;
-    }
-
-    button,
-    input,
-    select {
-      font: inherit;
-    }
-
-    .app-shell {
       height: 100vh;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
-      grid-template-rows: auto auto minmax(0, 1fr);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .topbar {
-      grid-column: 1 / -1;
+    /* ══════════════════════════════════════════════════════════════
+       HEADER
+       ══════════════════════════════════════════════════════════════ */
+    header {
+      height: 52px;
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      padding: 1rem 1.4rem;
+      padding: 0 1.25rem;
       border-bottom: 1px solid var(--border);
-      background: rgba(5, 10, 16, 0.72);
+      background: rgba(8, 9, 13, 0.92);
       backdrop-filter: blur(20px);
+      flex-shrink: 0;
+      z-index: 200;
     }
 
-    .brand {
+    .logo {
       display: flex;
       align-items: center;
-      gap: 0.85rem;
-    }
-
-    .brand-mark {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      background: linear-gradient(135deg, #ff7a18, #ffd166);
-      color: #081018;
+      gap: 0.5rem;
       font-weight: 700;
-      box-shadow: 0 10px 24px rgba(255, 122, 24, 0.26);
+      font-size: 0.95rem;
+      letter-spacing: -0.3px;
     }
 
-    .brand h1 {
-      font-size: 1.05rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-    }
-
-    .brand p {
-      font-size: 0.86rem;
-      color: var(--muted);
-      margin-top: 0.18rem;
-    }
-
-    .top-actions {
+    .logo-icon {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
-      justify-content: flex-end;
-      gap: 0.7rem;
+      justify-content: center;
+      font-size: 0.85rem;
     }
 
-    .status-pill {
-      display: inline-flex;
+    .header-center {
+      display: flex;
       align-items: center;
-      gap: 0.45rem;
-      padding: 0.45rem 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.03);
-      font-size: 0.78rem;
+      gap: 0.5rem;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.75rem;
       color: var(--muted);
     }
 
-    .status-dot {
-      width: 9px;
-      height: 9px;
+    #status-dot {
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: #5f7388;
-      transition: all 0.2s ease;
+      background: var(--muted2);
+      transition: all 0.3s;
       flex-shrink: 0;
     }
 
-    .status-dot.active {
-      background: var(--green);
-      box-shadow: 0 0 14px rgba(85, 229, 164, 0.6);
+    #status-dot.active {
+      background: var(--success);
+      box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
     }
 
-    .ghost-link,
-    .accent-btn,
-    .control-btn {
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      color: var(--text);
-      text-decoration: none;
-      cursor: pointer;
-      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-    }
-
-    .ghost-link:hover,
-    .accent-btn:hover,
-    .control-btn:hover {
-      transform: translateY(-1px);
-      border-color: rgba(255, 255, 255, 0.24);
-    }
-
-    .ghost-link {
-      padding: 0.6rem 0.9rem;
-      background: rgba(255, 255, 255, 0.04);
-      font-size: 0.82rem;
-    }
-
-    .accent-btn {
-      padding: 0.72rem 1rem;
-      background: linear-gradient(135deg, #ff7a18, #ff9b4a);
-      color: #081018;
-      font-weight: 700;
-      border-color: transparent;
-      box-shadow: 0 10px 22px rgba(255, 122, 24, 0.2);
-    }
-
-    .toolbar {
-      grid-column: 1 / -1;
-      display: flex;
-      flex-wrap: wrap;
+    /* ══════════════════════════════════════════════════════════════
+       TOOLBAR
+       ══════════════════════════════════════════════════════════════ */
+    #toolbar {
+      display: none;
       align-items: center;
-      gap: 0.65rem;
-      padding: 0.85rem 1.4rem;
+      gap: 0.4rem;
+      height: 44px;
+      padding: 0 1rem;
       border-bottom: 1px solid var(--border);
-      background: rgba(9, 18, 28, 0.92);
+      background: var(--surface);
+      flex-shrink: 0;
+      z-index: 190;
     }
 
-    .toolbar-group {
+    .tb-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all var(--transition);
+      white-space: nowrap;
       display: flex;
       align-items: center;
-      gap: 0.55rem;
-      padding-right: 0.7rem;
-      margin-right: 0.2rem;
-      border-right: 1px solid var(--border);
+      gap: 0.25rem;
     }
 
-    .toolbar-group:last-child {
-      border-right: 0;
-      padding-right: 0;
-      margin-right: 0;
+    .tb-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
     }
 
-    .control-btn {
-      padding: 0.58rem 0.84rem;
-      background: rgba(255, 255, 255, 0.04);
-      font-size: 0.84rem;
-      min-height: 42px;
+    .tb-btn:active {
+      transform: scale(0.95);
     }
 
-    .control-btn.warn {
-      color: var(--yellow);
+    .tb-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border2);
+      margin: 0 0.15rem;
+      flex-shrink: 0;
     }
 
-    .control-btn.danger {
-      color: var(--pink);
+    #page-info,
+    #zoom-info {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      min-width: 52px;
+      text-align: center;
     }
 
-    .inline-field {
-      display: inline-flex;
+    .tb-tool-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
       align-items: center;
-      gap: 0.55rem;
-      color: var(--muted);
-      font-size: 0.8rem;
+      gap: 0.3rem;
     }
 
-    .inline-field input {
-      width: 72px;
-      padding: 0.55rem 0.65rem;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-      text-align: center;
+    .tb-tool-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
     }
 
-    .meta-chip {
-      min-width: 78px;
-      text-align: center;
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 0.78rem;
-      color: var(--muted);
+    .tb-tool-btn:hover:not(.active) {
+      background: var(--surface3);
+      border-color: var(--muted2);
     }
 
-    .viewer-area {
-      position: relative;
+    /* ══════════════════════════════════════════════════════════════
+       MAIN LAYOUT
+       ══════════════════════════════════════════════════════════════ */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PDF AREA
+       ══════════════════════════════════════════════════════════════ */
+    #pdf-area {
+      flex: 1;
       overflow: auto;
-      padding: 1.5rem;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.015), transparent);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2rem;
+      background: var(--bg);
+      scroll-behavior: auto;
+      /* we handle smoothing ourselves */
+      position: relative;
     }
 
-    .viewer-stage {
-      min-height: 100%;
-      display: grid;
-      place-items: start center;
+    /* Scrollbar styling */
+    #pdf-area::-webkit-scrollbar {
+      width: 6px;
     }
 
-    .empty-state {
-      width: min(720px, 100%);
-      min-height: 480px;
+    #pdf-area::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #pdf-area::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+    }
+
+    #pdf-area::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Drop zone */
+    #drop-zone {
       display: flex;
       flex-direction: column;
-      justify-content: center;
       align-items: center;
-      gap: 1rem;
-      padding: 2.5rem;
-      border: 1px dashed rgba(255, 214, 174, 0.35);
-      border-radius: 28px;
-      background:
-        radial-gradient(circle at top, rgba(255, 122, 24, 0.12), transparent 35%),
-        rgba(255, 255, 255, 0.03);
-      text-align: center;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-      transition: border-color 0.15s ease, background 0.15s ease;
-    }
-
-    .empty-state.drag-over {
-      border-color: rgba(85, 214, 255, 0.65);
-      background:
-        radial-gradient(circle at top, rgba(85, 214, 255, 0.16), transparent 34%),
-        rgba(255, 255, 255, 0.04);
-    }
-
-    .empty-state strong {
-      font-size: 1.4rem;
-      line-height: 1.1;
-    }
-
-    .empty-state p {
-      max-width: 560px;
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 0.94rem;
-    }
-
-    .drop-actions {
-      display: flex;
-      flex-wrap: wrap;
       justify-content: center;
-      gap: 0.8rem;
-      margin-top: 0.35rem;
-    }
-
-    .viewer-card {
-      position: relative;
-      display: none;
+      gap: 1rem;
+      width: 100%;
+      height: 100%;
+      border: 2px dashed rgba(99, 102, 241, 0.3);
       border-radius: 24px;
-      overflow: hidden;
-      box-shadow: var(--shadow);
-      background: #101010;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      padding: 3rem;
     }
 
-    #pdf-canvas,
-    #overlay-canvas {
+    #drop-zone:hover {
+      border-color: rgba(99, 102, 241, 0.5);
+      background: rgba(99, 102, 241, 0.03);
+    }
+
+    #drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.08);
+      border-style: solid;
+    }
+
+    .drop-icon {
+      font-size: 3.5rem;
+      opacity: 0.5;
+    }
+
+    #drop-zone h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    #drop-zone p {
+      color: var(--muted);
+      font-size: 0.85rem;
+      max-width: 340px;
+      line-height: 1.7;
+    }
+
+    .browse-btn {
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      border: none;
+      color: white;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 0.6rem 1.5rem;
+      border-radius: 40px;
+      cursor: pointer;
+      transition: all var(--transition);
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    }
+
+    .browse-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 25px rgba(99, 102, 241, 0.4);
+    }
+
+    /* PDF pages container */
+    #pdf-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      gap: 20px;
+      padding-bottom: 3rem;
+    }
+
+    .page-wrapper {
+      position: relative;
+      background: #fff;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .page-wrapper canvas {
       display: block;
     }
 
-    #overlay-canvas {
+    .page-wrapper .hl-canvas {
       position: absolute;
-      inset: 0;
+      top: 0;
+      left: 0;
       pointer-events: none;
-    }
-
-    .floating-gesture {
-      position: absolute;
-      right: 1.2rem;
-      top: 1.2rem;
-      padding: 0.7rem 0.95rem;
-      border-radius: 14px;
-      background: rgba(5, 10, 16, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(18px);
-      font-weight: 700;
-      font-size: 0.88rem;
-      display: none;
       z-index: 2;
     }
 
-    .sidebar {
+    .page-wrapper .ink-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .page-num-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CURSOR OVERLAY (full screen, pointer-events: none)
+       ══════════════════════════════════════════════════════════════ */
+    #cursor-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       VIRTUAL FLOATING TOOLBAR (gesture-selectable)
+       ══════════════════════════════════════════════════════════════ */
+    .virtual-toolbar {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(24px);
+      padding: 6px 16px;
+      border-radius: 60px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      z-index: 300;
+      pointer-events: none;
+    }
+
+    .v-btn {
+      pointer-events: none;
+      background: var(--surface2);
+      border-radius: 40px;
+      padding: 7px 16px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+      color: var(--text2);
+      border: 1.5px solid transparent;
+      white-space: nowrap;
+    }
+
+    .v-btn.active {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+    }
+
+    .v-btn.hover-highlight {
+      border-color: rgba(255, 255, 255, 0.6);
+      transform: scale(1.05);
+      background: var(--surface3);
+    }
+
+    .v-btn .hover-progress {
+      position: absolute;
+      bottom: -3px;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 3px;
+      background: var(--accent2);
+      border-radius: 3px;
+      transition: width 0.1s;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       GESTURE INDICATOR (floating pill — above virtual toolbar)
+       ══════════════════════════════════════════════════════════════ */
+    #gesture-pill {
+      position: fixed;
+      bottom: 75px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 50px;
+      padding: 6px 18px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text);
+      z-index: 301;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #gesture-pill.visible {
+      opacity: 1;
+    }
+
+    #gesture-pill .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SIDEBAR
+       ══════════════════════════════════════════════════════════════ */
+    #sidebar {
+      width: 265px;
+      flex-shrink: 0;
+      background: var(--surface);
       border-left: 1px solid var(--border);
-      background: rgba(8, 18, 28, 0.92);
-      overflow-y: auto;
-      padding: 1rem;
       display: flex;
       flex-direction: column;
-      gap: 0.95rem;
+      overflow-y: auto;
+      z-index: 100;
     }
 
-    .panel {
-      padding: 1rem;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    #sidebar::-webkit-scrollbar {
+      width: 4px;
     }
 
-    .panel h2 {
-      font-size: 0.8rem;
-      letter-spacing: 0.11em;
+    #sidebar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #sidebar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+    }
+
+    .s-section {
+      padding: 0.85rem 0.9rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .s-title {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--muted);
-      margin-bottom: 0.9rem;
-    }
-
-    .stack {
+      margin-bottom: 0.6rem;
       display: flex;
-      flex-direction: column;
-      gap: 0.7rem;
+      align-items: center;
+      gap: 0.4rem;
     }
 
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.7rem;
-    }
-
-    .stat-card {
-      padding: 0.8rem;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .stat-card span {
-      display: block;
-      color: var(--muted);
-      font-size: 0.73rem;
-      margin-bottom: 0.35rem;
-    }
-
-    .stat-card strong {
-      font-size: 1.05rem;
-    }
-
-    .doc-name {
-      font-size: 0.95rem;
-      font-weight: 700;
-      line-height: 1.4;
-      overflow-wrap: anywhere;
-    }
-
-    .subtle {
-      color: var(--muted);
-      font-size: 0.8rem;
-      line-height: 1.6;
-    }
-
-    .camera-box {
+    /* Camera */
+    #cam-box {
       position: relative;
+      border-radius: var(--radius);
       overflow: hidden;
-      border-radius: 18px;
-      background: #02060b;
-      aspect-ratio: 4 / 3;
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: #000;
+      aspect-ratio: 4/3;
     }
 
     #webcam {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1);
       display: block;
+      opacity: 0;
     }
 
     #hand-canvas {
       position: absolute;
-      inset: 0;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
     }
 
+    #gesture-badge {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      border-radius: 30px;
+      padding: 3px 12px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      display: none;
+      z-index: 10;
+    }
+
+    #start-btn {
+      width: 100%;
+      margin-top: 0.5rem;
+      padding: 0.45rem;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+
+    #start-btn:hover {
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+
+    #start-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    /* Color palette */
     .color-row {
       display: flex;
+      gap: 8px;
       flex-wrap: wrap;
-      gap: 0.6rem;
     }
 
-    .color-swatch {
-      width: 32px;
-      height: 32px;
+    .swatch {
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
-      border: 3px solid transparent;
       cursor: pointer;
-      transition: transform 0.15s ease, border-color 0.15s ease;
+      border: 2.5px solid transparent;
+      transition: all var(--transition);
+      position: relative;
     }
 
-    .color-swatch.selected {
-      border-color: #ffffff;
-      transform: scale(1.08);
+    .swatch:hover {
+      transform: scale(1.15);
     }
 
-    .gesture-item {
-      display: grid;
-      grid-template-columns: 42px minmax(0, 1fr);
-      gap: 0.8rem;
+    .swatch.selected {
+      border-color: #fff;
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+    }
+
+    /* Gesture guide */
+    .g-item {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      font-size: 0.72rem;
+      border-bottom: 1px solid var(--border);
       align-items: center;
-      padding: 0.8rem;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .gesture-item strong {
-      display: block;
-      font-size: 0.9rem;
-      margin-bottom: 0.15rem;
+    .g-item:last-child {
+      border-bottom: none;
     }
 
-    .gesture-item span {
+    .g-icon {
+      font-size: 1.15rem;
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .g-label {
+      font-weight: 600;
+      color: var(--text2);
+    }
+
+    .g-desc {
       color: var(--muted);
-      font-size: 0.8rem;
-      line-height: 1.5;
+      font-size: 0.68rem;
     }
 
-    .gesture-icon {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      font-size: 1.2rem;
+    /* Notes panel */
+    #notes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    #notes-list::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    #notes-list::-webkit-scrollbar-thumb {
       background: rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
     }
 
-    .range-input {
-      width: 100%;
-      accent-color: var(--aqua);
+    .note-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.5rem;
+      background: var(--surface2);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all var(--transition);
+      font-size: 0.72rem;
     }
 
-    .full-width {
-      width: 100%;
+    .note-item:hover {
+      background: var(--surface3);
     }
 
-    .hidden-input {
-      display: none;
+    .note-color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
     }
 
-    @media (max-width: 1080px) {
-      .app-shell {
-        grid-template-columns: minmax(0, 1fr);
+    .note-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .note-page {
+      font-weight: 600;
+      color: var(--text2);
+    }
+
+    .note-type {
+      color: var(--muted);
+      font-size: 0.65rem;
+    }
+
+    .note-delete {
+      background: none;
+      border: none;
+      color: var(--muted2);
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: all var(--transition);
+      flex-shrink: 0;
+    }
+
+    .note-delete:hover {
+      color: var(--danger);
+      background: rgba(244, 63, 94, 0.1);
+    }
+
+    .notes-empty {
+      color: var(--muted2);
+      font-size: 0.72rem;
+      text-align: center;
+      padding: 1rem 0;
+      font-style: italic;
+    }
+
+    .notes-actions {
+      display: flex;
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+    }
+
+    .notes-actions button {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 0.65rem;
+      font-weight: 500;
+      padding: 0.3rem 0;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .notes-actions button:hover {
+      background: var(--surface3);
+    }
+
+    .notes-actions button.danger:hover {
+      background: rgba(244, 63, 94, 0.1);
+      color: var(--danger);
+    }
+
+    /* Tips */
+    .tips-text {
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ANIMATIONS
+       ══════════════════════════════════════════════════════════════ */
+    @keyframes pulse-glow {
+
+      0%,
+      100% {
+        opacity: 1;
       }
 
-      .sidebar {
-        border-left: 0;
-        border-top: 1px solid var(--border);
+      50% {
+        opacity: 0.5;
       }
     }
 
-    @media (max-width: 760px) {
-      body {
-        overflow: auto;
+    @keyframes fade-in {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
       }
 
-      .app-shell {
-        height: auto;
-        min-height: 100vh;
+      to {
+        opacity: 1;
+        transform: translateY(0);
       }
+    }
 
-      .viewer-area {
-        min-height: 55vh;
-        padding: 1rem;
-      }
-
-      .toolbar,
-      .topbar {
-        padding-left: 1rem;
-        padding-right: 1rem;
-      }
-
-      .toolbar-group {
-        border-right: 0;
-        padding-right: 0;
-      }
+    .page-wrapper {
+      animation: fade-in 0.3s ease forwards;
     }
   </style>
 </head>
 
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">PDF</div>
-        <div>
-          <h1>Gesture Controlled PDF Viewer</h1>
-          <p>Pinch to zoom, swipe pages, point to track, and highlight in mid-air.</p>
-        </div>
-      </div>
-      <div class="top-actions">
-        <div class="status-pill">
-          <div class="status-dot" id="camera-status-dot"></div>
-          <span id="camera-status-text">Camera off</span>
-        </div>
-        <a class="ghost-link" href="/">Back To Air Drawing</a>
-        <button class="accent-btn" id="open-file-btn" type="button">Open PDF</button>
-        <input class="hidden-input" id="file-input" type="file" accept="application/pdf" />
-      </div>
-    </header>
 
-    <div class="toolbar">
-      <div class="toolbar-group">
-        <button class="control-btn" id="btn-prev" type="button">Prev</button>
-        <div class="meta-chip" id="page-info">0 / 0</div>
-        <button class="control-btn" id="btn-next" type="button">Next</button>
-      </div>
+  <!-- ═══ HEADER ═══ -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">✋</div>
+      GesturePDF Pro
+    </div>
+    <div class="header-right">
+      <div id="status-dot"></div>
+      <span id="cam-label">Camera off</span>
+    </div>
+  </header>
 
-      <div class="toolbar-group">
-        <button class="control-btn" id="btn-zoom-out" type="button">- Zoom</button>
-        <div class="meta-chip" id="zoom-info">100%</div>
-        <button class="control-btn" id="btn-zoom-in" type="button">+ Zoom</button>
-        <button class="control-btn" id="btn-fit" type="button">Fit Width</button>
-      </div>
+  <!-- ═══ TOOLBAR ═══ -->
+  <div id="toolbar">
+    <button class="tb-btn" id="btn-prev">◀ Prev</button>
+    <span id="page-info">— / —</span>
+    <button class="tb-btn" id="btn-next">Next ▶</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-zoom-out">− Zoom</button>
+    <span id="zoom-info">150%</span>
+    <button class="tb-btn" id="btn-zoom-in">+ Zoom</button>
+    <div class="tb-sep"></div>
+    <button class="tb-tool-btn active" id="btn-tool-pen" data-tool="pen">✍️ Pen</button>
+    <button class="tb-tool-btn" id="btn-tool-hl" data-tool="highlighter">🟡 Highlight</button>
+    <button class="tb-btn" id="btn-search-pad">🔍 Search</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn danger-btn" id="btn-clear" style="color: var(--danger);">🗑 Clear Page</button>
+  </div>
 
-      <div class="toolbar-group">
-        <label class="inline-field" for="page-jump">
-          Page
-          <input id="page-jump" type="number" min="1" value="1" />
-        </label>
-        <button class="control-btn" id="btn-go" type="button">Go</button>
-      </div>
+  <!-- ═══ MAIN ═══ -->
+  <div class="main">
 
-      <div class="toolbar-group">
-        <button class="control-btn warn" id="btn-export" type="button">Export Highlights</button>
-        <button class="control-btn danger" id="btn-clear-page" type="button">Clear Page</button>
-        <button class="control-btn danger" id="btn-clear-all" type="button">Clear All</button>
+    <!-- PDF Area -->
+    <div id="pdf-area">
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="drop-icon">📄</div>
+        <h2>Open a PDF</h2>
+        <p>Drag & drop your PDF here or click to browse. Then enable your camera for full gesture control.</p>
+        <button class="browse-btn"
+          onclick="event.stopPropagation();document.getElementById('file-input').click()">Browse File</button>
+        <input type="file" id="file-input" accept="application/pdf" style="display:none" />
       </div>
+      <div id="pdf-container"></div>
     </div>
 
-    <main class="viewer-area" id="viewer-area">
-      <div class="viewer-stage">
-        <div class="empty-state" id="drop-zone" role="button" tabindex="0" aria-label="Open PDF">
-          <strong>Drop a PDF here to begin</strong>
-          <p>
-            This page is built as a separate PDF endpoint for your project.
-            Once a file is loaded, you can navigate with buttons or gestures, highlight content, and export the saved highlight rectangles as JSON.
-          </p>
-          <div class="drop-actions">
-            <button class="accent-btn" type="button" id="browse-cta">Browse Files</button>
-            <button class="ghost-link" type="button" id="start-camera-btn">Enable Camera</button>
-          </div>
-        </div>
+    <!-- Sidebar -->
+    <aside id="sidebar">
 
-        <div class="viewer-card" id="viewer-card">
-          <canvas id="pdf-canvas"></canvas>
-          <canvas id="overlay-canvas"></canvas>
-          <div class="floating-gesture" id="gesture-label"></div>
+      <!-- Camera Section -->
+      <div class="s-section">
+        <div class="s-title">📹 Hand Tracking</div>
+        <div id="cam-box">
+          <video id="webcam" autoplay playsinline muted></video>
+          <canvas id="hand-canvas"></canvas>
+          <div id="gesture-badge">—</div>
+        </div>
+        <button id="start-btn">📷 Enable Camera</button>
+      </div>
+
+      <!-- Tool & Color -->
+      <div class="s-section">
+        <div class="s-title">🎨 Active Color</div>
+        <div class="color-row" id="color-palette">
+          <div class="swatch selected" data-color="#FFD700" style="background:#FFD700" title="Yellow"></div>
+          <div class="swatch" data-color="#86efac" style="background:#86efac" title="Green"></div>
+          <div class="swatch" data-color="#93c5fd" style="background:#93c5fd" title="Blue"></div>
+          <div class="swatch" data-color="#f9a8d4" style="background:#f9a8d4" title="Pink"></div>
+          <div class="swatch" data-color="#fca5a5" style="background:#fca5a5" title="Red"></div>
+          <div class="swatch" data-color="#d8b4fe" style="background:#d8b4fe" title="Purple"></div>
         </div>
       </div>
-    </main>
 
-    <aside class="sidebar">
-      <section class="panel">
-        <h2>Document</h2>
-        <div class="stack">
-          <div class="doc-name" id="doc-name">No PDF loaded yet</div>
-          <div class="subtle" id="doc-summary">Load a file to activate page rendering and gesture controls.</div>
-          <div class="stat-grid">
-            <div class="stat-card">
-              <span>Pages</span>
-              <strong id="stat-pages">0</strong>
-            </div>
-            <div class="stat-card">
-              <span>Highlights</span>
-              <strong id="stat-highlights">0</strong>
-            </div>
-          </div>
-          <label class="subtle" for="page-slider">Quick scrub</label>
-          <input class="range-input" id="page-slider" type="range" min="1" max="1" value="1" />
+      <!-- Notes -->
+      <div class="s-section">
+        <div class="s-title">📝 Notes & Highlights</div>
+        <div id="notes-list">
+          <div class="notes-empty">No annotations yet</div>
         </div>
-      </section>
-
-      <section class="panel">
-        <h2>Hand Tracking</h2>
-        <div class="stack">
-          <div class="camera-box">
-            <video id="webcam" autoplay muted playsinline></video>
-            <canvas id="hand-canvas"></canvas>
-          </div>
-          <button class="accent-btn full-width" id="camera-toggle-btn" type="button">Start Camera</button>
-          <div class="subtle" id="gesture-status-copy">No gesture detected yet.</div>
+        <div class="notes-actions">
+          <button id="btn-export-notes">📥 Export JSON</button>
+          <button id="btn-clear-all-notes" class="danger">🗑 Clear All</button>
         </div>
-      </section>
+      </div>
 
-      <section class="panel">
-        <h2>Highlight Color</h2>
-        <div class="color-row">
-          <button class="color-swatch selected" data-color="#FFD166" style="background:#FFD166" type="button" title="Yellow"></button>
-          <button class="color-swatch" data-color="#90F1EF" style="background:#90F1EF" type="button" title="Aqua"></button>
-          <button class="color-swatch" data-color="#98F5A5" style="background:#98F5A5" type="button" title="Green"></button>
-          <button class="color-swatch" data-color="#BDB2FF" style="background:#BDB2FF" type="button" title="Lavender"></button>
-          <button class="color-swatch" data-color="#FF8FAB" style="background:#FF8FAB" type="button" title="Pink"></button>
-          <button class="color-swatch" data-color="#FFAD66" style="background:#FFAD66" type="button" title="Orange"></button>
+      <!-- Gesture Guide -->
+      <div class="s-section">
+        <div class="s-title">🖐️ Gesture Guide</div>
+        <div class="g-item">
+          <div class="g-icon">☝️</div>
+          <div><span class="g-label">Index finger</span><br><span class="g-desc">Pointer cursor
+              (always)</span></div>
         </div>
-      </section>
-
-      <section class="panel">
-        <h2>Gesture Guide</h2>
-        <div class="stack">
-          <div class="gesture-item">
-            <div class="gesture-icon">🤏</div>
-            <div>
-              <strong>Pinch</strong>
-              <span>Pinch in or out to zoom the current page.</span>
-            </div>
-          </div>
-          <div class="gesture-item">
-            <div class="gesture-icon">✋</div>
-            <div>
-              <strong>Open Hand Swipe</strong>
-              <span>Move your open hand left or right to change page.</span>
-            </div>
-          </div>
-          <div class="gesture-item">
-            <div class="gesture-icon">✌</div>
-            <div>
-              <strong>Two Fingers</strong>
-              <span>Hold and drag to create a highlight rectangle.</span>
-            </div>
-          </div>
-          <div class="gesture-item">
-            <div class="gesture-icon">☝</div>
-            <div>
-              <strong>Point</strong>
-              <span>Use your index finger as a live cursor over the page.</span>
-            </div>
+        <div class="g-item">
+          <div class="g-icon">✌️</div>
+          <div><span class="g-label">Two fingers</span><br><span class="g-desc">Draw with pen /
+              highlighter</span></div>
+        </div>
+        <div class="g-item">
+          <div class="g-icon">✊</div>
+          <div><span class="g-label">Fist</span><br><span class="g-desc">Smooth scroll PDF up/down</span>
           </div>
         </div>
-      </section>
-
-      <section class="panel">
-        <h2>Shortcuts</h2>
-        <div class="subtle">
-          Left / Right arrows change pages.<br />
-          + and - zoom.<br />
-          F fits width.<br />
-          Delete clears the current page highlights.
+        <div class="g-item">
+          <div class="g-icon">✋</div>
+          <div><span class="g-label">Open hand swipe</span><br><span class="g-desc">Next / prev page</span>
+          </div>
         </div>
-      </section>
+        <div class="g-item">
+          <div class="g-icon">🤏</div>
+          <div><span class="g-label">Pinch</span><br><span class="g-desc">Zoom in / out</span></div>
+        </div>
+        <div class="g-item">
+          <div class="g-icon">🎯</div>
+          <div><span class="g-label">Hover over toolbar</span><br><span class="g-desc">Point at button to
+              select tool</span></div>
+        </div>
+      </div>
+
+      <!-- Tips -->
+      <div class="s-section">
+        <div class="s-title">💡 Tips</div>
+        <p class="tips-text">
+          • Keep hand 30–60 cm from camera<br>
+          • Good lighting improves accuracy<br>
+          • Gestures need ~0.3s to activate<br>
+          • Use toolbar buttons as fallback<br>
+          • Click page in Notes to navigate
+        </p>
+      </div>
     </aside>
   </div>
 
-  <script type="module">
-    import { FilesetResolver, HandLandmarker } from "/static/vendor/mediapipe/vision_bundle.mjs";
+  <!-- Virtual floating toolbar (gesture-selectable) -->
+  <div class="virtual-toolbar" id="virtual-toolbar">
+    <div class="v-btn active" data-tool="pen">✍️ Pen</div>
+    <div class="v-btn" data-tool="highlighter">🟡 Highlight</div>
+  </div>
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  <!-- Gesture pill (floating indicator) -->
+  <div id="gesture-pill">
+    <div class="dot"></div>
+    <span id="pill-text">—</span>
+  </div>
 
-    const MIN_SCALE = 0.5;
-    const MAX_SCALE = 4.5;
-    const PAGE_SWIPE_THRESHOLD = 0.06;
-    const PAGE_COOLDOWN_FRAMES = 18;
+  <!-- Cursor overlay -->
+  <canvas id="cursor-canvas"></canvas>
 
-    const state = {
-      pdfDoc: null,
-      currentPage: 1,
-      totalPages: 0,
-      scale: 1.2,
-      fitMode: true,
-      highlights: {},
-      highlightColor: "#FFD166",
-      objectUrl: null,
-      docName: "No PDF loaded yet",
-      rendering: false,
-      pendingPage: null,
-      pendingReason: "manual",
-      handLandmarker: null,
-      webcamRunning: false,
-      videoTime: -1,
-      stream: null,
-      isHighlighting: false,
-      highlightStart: null,
-      prevPinchDist: null,
-      lastOpenHandX: null,
-      pageCooldown: 0,
-      gestureTimer: null
-    };
+  <!-- ═══════════════════════════════════════════════════════════════
+       JAVASCRIPT
+       ═══════════════════════════════════════════════════════════════ -->
+  <script type="module" defer>
+    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
 
-    const pdfCanvas = document.getElementById("pdf-canvas");
-    const pdfCtx = pdfCanvas.getContext("2d");
-    const overlayCanvas = document.getElementById("overlay-canvas");
-    const overlayCtx = overlayCanvas.getContext("2d");
-    const handCanvas = document.getElementById("hand-canvas");
-    const handCtx = handCanvas.getContext("2d");
-    const webcam = document.getElementById("webcam");
-    const viewerArea = document.getElementById("viewer-area");
-    const viewerCard = document.getElementById("viewer-card");
+    // ─── PDF.js Setup ──────────────────────────────────────────────
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    // ─── DOM References ────────────────────────────────────────────
+    const cursorCanvas = document.getElementById("cursor-canvas");
+    const cursorCtx = cursorCanvas.getContext("2d");
+    const webcamVideo = document.getElementById("webcam");
+    const handCanvasEl = document.getElementById("hand-canvas");
+    const handCtx = handCanvasEl.getContext("2d");
     const dropZone = document.getElementById("drop-zone");
-    const fileInput = document.getElementById("file-input");
-    const openFileBtn = document.getElementById("open-file-btn");
-    const browseCta = document.getElementById("browse-cta");
-    const startCameraBtn = document.getElementById("start-camera-btn");
-    const cameraToggleBtn = document.getElementById("camera-toggle-btn");
-    const cameraStatusDot = document.getElementById("camera-status-dot");
-    const cameraStatusText = document.getElementById("camera-status-text");
-    const gestureLabel = document.getElementById("gesture-label");
-    const gestureStatusCopy = document.getElementById("gesture-status-copy");
+    const pdfContainer = document.getElementById("pdf-container");
+    const pdfArea = document.getElementById("pdf-area");
     const pageInfo = document.getElementById("page-info");
     const zoomInfo = document.getElementById("zoom-info");
-    const pageJump = document.getElementById("page-jump");
-    const pageSlider = document.getElementById("page-slider");
-    const statPages = document.getElementById("stat-pages");
-    const statHighlights = document.getElementById("stat-highlights");
-    const docName = document.getElementById("doc-name");
-    const docSummary = document.getElementById("doc-summary");
+    const startBtn = document.getElementById("start-btn");
+    const statusDot = document.getElementById("status-dot");
+    const camLabel = document.getElementById("cam-label");
+    const gestureBadge = document.getElementById("gesture-badge");
+    const toolbar = document.getElementById("toolbar");
+    const gesturePill = document.getElementById("gesture-pill");
+    const pillText = document.getElementById("pill-text");
+    const pillDot = gesturePill.querySelector(".dot");
+    const notesList = document.getElementById("notes-list");
+    const virtualBtns = document.querySelectorAll(".v-btn");
 
-    function updateHeaderState() {
-      cameraStatusDot.classList.toggle("active", state.webcamRunning);
-      cameraStatusText.textContent = state.webcamRunning ? "Camera live" : "Camera off";
-      cameraToggleBtn.textContent = state.webcamRunning ? "Camera Running" : "Start Camera";
+    // ─── App State ─────────────────────────────────────────────────
+    let pdfDoc = null;
+    let pdfTextIndex = {};
+    let totalPages = 0;
+    let scale = 1.5;
+    const MIN_SCALE = 0.5, MAX_SCALE = 4.0;
+
+    // Current visible page (for display; tracked via intersection observer)
+    let currentPage = 1;
+
+    // Page wrappers array: [{ wrapper, pdfCanvas, hlCanvas, inkCanvas, pageNum }]
+    let pageElements = [];
+
+    // Tool state
+    let activeTool = "pen"; // "pen" or "highlighter" — selected via virtual toolbar
+    let activeColor = "#FFD700";
+
+    // Annotations storage
+    // highlights: { pageNum: [{ x, y, w, h, color, id, timestamp }] }
+    // penStrokes: { pageNum: [{ points: [{x,y}], color, id, timestamp }] }
+    let highlights = {};
+    let penStrokes = {};
+    let annotationIdCounter = 0;
+
+    // Drawing state
+    let currentStroke = null;
+
+    // Virtual button hover detection
+    let hoverTimer = null;
+    let hoverStartTime = 0;
+    let currentHoveredBtn = null;
+    const HOVER_DURATION = 600; // ms to dwell before selecting tool
+
+    // ─── MediaPipe State ───────────────────────────────────────────
+    let handLandmarker = null;
+    let webcamRunning = false;
+    let lastVideoTime = -1;
+
+    // ─── Gesture State Machine ─────────────────────────────────────
+    const CONFIRM_FRAMES = 8;   // frames to confirm a new gesture
+    const RELEASE_FRAMES = 4;   // frames to release current gesture
+    let rawGesture = "none";
+    let rawCount = 0;
+    let activeGesture = "none";
+    let releaseCount = 0;
+
+    // Transition guards: prevent direct fist→point transitions
+    let lastActiveGesture = "none";
+    let guardCooldown = 0;
+    const GUARD_PAIRS = new Set(["fist→point", "point→fist", "open→point", "fist→peace", "peace→fist"]);
+
+    // ─── Gesture Data ──────────────────────────────────────────────
+    let prevWristY = null;
+    let prevWristX = null;
+    let openStableFrames = 0;
+    let pageCooldown = 0;
+    let pinchStartDist = null;
+    let lastZoomAction = null;
+    let lastLandmarks = null;
+
+    // ─── Scroll Inertia ────────────────────────────────────────────
+    let scrollVelocity = 0;
+    let scrollInertiaActive = false;
+    let scrollInertiaRAF = null;
+
+    // ═══════════════════════════════════════════════════════════════
+    // ONE EURO FILTER — Adaptive low-pass filter for anti-jitter
+    // ═══════════════════════════════════════════════════════════════
+    class OneEuroFilter {
+      constructor(freq = 60, minCutoff = 1.0, beta = 0.007, dCutoff = 1.0) {
+        this.freq = freq;
+        this.minCutoff = minCutoff;
+        this.beta = beta;
+        this.dCutoff = dCutoff;
+        this.xPrev = null;
+        this.dxPrev = 0;
+        this.tPrev = null;
+      }
+
+      _alpha(cutoff) {
+        const tau = 1.0 / (2 * Math.PI * cutoff);
+        const te = 1.0 / this.freq;
+        return 1.0 / (1.0 + tau / te);
+      }
+
+      _expSmoothing(a, x, xPrev) {
+        return a * x + (1 - a) * xPrev;
+      }
+
+      filter(x, timestamp) {
+        if (this.xPrev === null) {
+          this.xPrev = x;
+          this.tPrev = timestamp;
+          return x;
+        }
+
+        const dt = timestamp - this.tPrev;
+        this.tPrev = timestamp;
+
+        if (dt > 0) {
+          this.freq = 1.0 / dt;
+        }
+
+        // Derivative
+        const dx = (x - this.xPrev) * this.freq;
+        const adx = this._alpha(this.dCutoff);
+        const dxSmooth = this._expSmoothing(adx, dx, this.dxPrev);
+        this.dxPrev = dxSmooth;
+
+        // Adaptive cutoff
+        const cutoff = this.minCutoff + this.beta * Math.abs(dxSmooth);
+        const ax = this._alpha(cutoff);
+
+        const xSmooth = this._expSmoothing(ax, x, this.xPrev);
+        this.xPrev = xSmooth;
+
+        return xSmooth;
+      }
+
+      reset() {
+        this.xPrev = null;
+        this.dxPrev = 0;
+        this.tPrev = null;
+      }
     }
 
-    function updateDocMeta() {
-      docName.textContent = state.docName;
-      statPages.textContent = String(state.totalPages);
-      pageInfo.textContent = `${state.currentPage} / ${state.totalPages || 0}`;
-      zoomInfo.textContent = `${Math.round(state.scale * 100)}%`;
-      pageJump.value = String(state.currentPage || 1);
-      pageJump.max = String(state.totalPages || 1);
-      pageSlider.max = String(state.totalPages || 1);
-      pageSlider.value = String(state.currentPage || 1);
-      statHighlights.textContent = String(getHighlightCount());
-      docSummary.textContent = state.pdfDoc
-        ? `${state.totalPages} page PDF loaded. Gesture controls are ready once the camera is enabled.`
-        : "Load a file to activate page rendering and gesture controls.";
+    // Create filter instances — SEPARATE for pointer vs drawing to avoid state conflicts
+    // Pointer filters (used by index finger cursor)
+    const ptrFilterX = new OneEuroFilter(60, 1.5, 0.007, 1.0);
+    const ptrFilterY = new OneEuroFilter(60, 1.5, 0.007, 1.0);
+    // Drawing filters (used by two-finger pen/highlighter)
+    const drawFilterX = new OneEuroFilter(60, 1.0, 0.005, 1.0);
+    const drawFilterY = new OneEuroFilter(60, 1.0, 0.005, 1.0);
+    // Scroll filter
+    const scrollFilter = new OneEuroFilter(60, 0.8, 0.01, 1.0);
+
+    // ═══════════════════════════════════════════════════════════════
+    // GESTURE CLASSIFICATION (angle-invariant)
+    // ═══════════════════════════════════════════════════════════════
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
     }
 
-    function getHighlightCount() {
-      return Object.values(state.highlights).reduce((sum, items) => sum + items.length, 0);
+    function isFingerExtended(tip, pip, mcp, wrist) {
+      // Use distance ratio: if tip is further from wrist than MCP, finger is extended
+      const tipDist = dist(tip, wrist);
+      const mcpDist = dist(mcp, wrist);
+      return tipDist > mcpDist * 1.05;
     }
 
-    function normalizedRectFromCanvas(x1, y1, x2, y2) {
-      const x = Math.min(x1, x2);
-      const y = Math.min(y1, y2);
-      const w = Math.abs(x2 - x1);
-      const h = Math.abs(y2 - y1);
+    function classifyGesture(lm) {
+      const wrist = lm[0];
+      const thumbTip = lm[4], thumbIP = lm[3], thumbMCP = lm[2];
+      const idxTip = lm[8], idxPIP = lm[6], idxMCP = lm[5];
+      const midTip = lm[12], midPIP = lm[10], midMCP = lm[9];
+      const ringTip = lm[16], ringPIP = lm[14], ringMCP = lm[13];
+      const pinkTip = lm[20], pinkPIP = lm[18], pinkMCP = lm[17];
+
+      const idxUp = isFingerExtended(idxTip, idxPIP, idxMCP, wrist);
+      const midUp = isFingerExtended(midTip, midPIP, midMCP, wrist);
+      const ringUp = isFingerExtended(ringTip, ringPIP, ringMCP, wrist);
+      const pinkUp = isFingerExtended(pinkTip, pinkPIP, pinkMCP, wrist);
+
+      const pinchDist = dist(thumbTip, idxTip);
+      const palmSize = dist(wrist, idxMCP);
+
+      // Gesture set: pinch > open > fist > peace > point > none
+      // "point" = ALWAYS pointer cursor. "peace" = draw with active tool.
+
+      // Pinch: thumb and index close, others down
+      if (pinchDist < palmSize * 0.35 && !midUp && !ringUp && !pinkUp) {
+        return "pinch";
+      }
+
+      // Open hand: all 4 fingers up
+      if (idxUp && midUp && ringUp && pinkUp) {
+        return "open";
+      }
+
+      // Fist: all 4 fingers down
+      if (!idxUp && !midUp && !ringUp && !pinkUp) {
+        return "fist";
+      }
+
+      // Peace: index + middle up, ring + pinky down → DRAW
+      if (idxUp && midUp && !ringUp && !pinkUp) {
+        return "peace";
+      }
+
+      // Three fingers (index+mid+ring): treat as peace for drawing
+      if (idxUp && midUp && ringUp && !pinkUp) {
+        return "peace";
+      }
+
+      // Point: ONLY index up → always pointer cursor
+      if (idxUp && !midUp && !ringUp && !pinkUp) {
+        return "point";
+      }
+
+      return "none";
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GESTURE STATE MACHINE WITH HYSTERESIS
+    // ═══════════════════════════════════════════════════════════════
+    function updateGestureState(raw) {
+      if (guardCooldown > 0) guardCooldown--;
+
+      if (raw === rawGesture) {
+        rawCount++;
+      } else {
+        rawGesture = raw;
+        rawCount = 1;
+      }
+
+      // Check if raw differs from active
+      if (raw !== activeGesture) {
+        releaseCount++;
+      } else {
+        releaseCount = 0;
+      }
+
+      // Release current gesture if held different for RELEASE_FRAMES
+      if (releaseCount >= RELEASE_FRAMES && activeGesture !== "none") {
+        onGestureExit(activeGesture);
+        lastActiveGesture = activeGesture;
+        guardCooldown = 6; // guard frames after exit
+        activeGesture = "none";
+        releaseCount = 0;
+      }
+
+      // Activate new gesture if confirmed for CONFIRM_FRAMES
+      if (rawCount >= CONFIRM_FRAMES && raw !== activeGesture && raw !== "none") {
+        // Check transition guard
+        const transition = `${lastActiveGesture}→${raw}`;
+        if (GUARD_PAIRS.has(transition) && guardCooldown > 0) {
+          // Block this transition during guard period
+          return activeGesture;
+        }
+
+        if (activeGesture !== "none") {
+          onGestureExit(activeGesture);
+        }
+        activeGesture = raw;
+        onGestureEnter(activeGesture);
+        releaseCount = 0;
+      }
+
+      return activeGesture;
+    }
+
+    function onGestureEnter(g) {
+      if (g === "pinch" && lastLandmarks) {
+        pinchStartDist = dist(lastLandmarks[4], lastLandmarks[8]);
+        lastZoomAction = null;
+      }
+      if (g === "open") {
+        prevWristX = null;
+        openStableFrames = 0;
+      }
+      if (g === "fist") {
+        prevWristY = null;
+        scrollVelocity = 0;
+        scrollFilter.reset();
+        stopInertia();
+      }
+      if (g === "point") {
+        // Pointer mode — finish any previous drawing stroke
+        if (currentStroke) finishPenStroke();
+        clearVirtualHover();
+        ptrFilterX.reset();
+        ptrFilterY.reset();
+      }
+      if (g === "peace") {
+        // Drawing mode — reset drawing filters for fresh start
+        drawFilterX.reset();
+        drawFilterY.reset();
+      }
+    }
+
+    function onGestureExit(g) {
+      if (g === "peace" && currentStroke) {
+        finishPenStroke();
+      }
+      if (g === "pinch") {
+        pinchStartDist = null;
+        lastZoomAction = null;
+      }
+      if (g === "open") {
+        prevWristX = null;
+        openStableFrames = 0;
+      }
+      if (g === "fist") {
+        startInertia();
+        prevWristY = null;
+      }
+      // Clear virtual hover
+      clearVirtualHover();
+      cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PDF RENDERING (Multi-page continuous)
+    // ═══════════════════════════════════════════════════════════════
+    async function renderAllPages() {
+      if (!pdfDoc) return;
+
+      pdfContainer.innerHTML = "";
+      pageElements = [];
+
+      for (let i = 1; i <= totalPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const textContent = await page.getTextContent();
+        const strings = textContent.items.map(item => item.str).join(" ");
+        pdfTextIndex[i] = strings.toLowerCase();
+        const viewport = page.getViewport({ scale });
+
+        // Create wrapper
+        const wrapper = document.createElement("div");
+        wrapper.className = "page-wrapper";
+        wrapper.style.width = viewport.width + "px";
+        wrapper.style.height = viewport.height + "px";
+        wrapper.dataset.page = i;
+
+        // PDF canvas
+        const pdfCanvas = document.createElement("canvas");
+        pdfCanvas.className = "pdf-canvas";
+        pdfCanvas.width = viewport.width;
+        pdfCanvas.height = viewport.height;
+        wrapper.appendChild(pdfCanvas);
+
+        // Highlight canvas
+        const hlCanvas = document.createElement("canvas");
+        hlCanvas.className = "hl-canvas";
+        hlCanvas.width = viewport.width;
+        hlCanvas.height = viewport.height;
+        wrapper.appendChild(hlCanvas);
+
+        // Ink canvas
+        const inkCanvas = document.createElement("canvas");
+        inkCanvas.className = "ink-canvas";
+        inkCanvas.width = viewport.width;
+        inkCanvas.height = viewport.height;
+        wrapper.appendChild(inkCanvas);
+
+        // Page number badge
+        const badge = document.createElement("div");
+        badge.className = "page-num-badge";
+        badge.textContent = `Page ${i}`;
+        wrapper.appendChild(badge);
+
+        pdfContainer.appendChild(wrapper);
+
+        const entry = { wrapper, pdfCanvas, hlCanvas, inkCanvas, pageNum: i };
+        pageElements.push(entry);
+
+        // Render PDF page
+        const ctx = pdfCanvas.getContext("2d");
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        // Redraw annotations
+        redrawHighlights(i);
+        redrawPenStrokes(i);
+      }
+
+      updatePageInfo();
+      setupIntersectionObserver();
+    }
+
+    function searchTextAndJump(query) {
+      query = query.toLowerCase();
+
+      for (let page in pdfTextIndex) {
+        if (pdfTextIndex[page].includes(query)) {
+          scrollToPage(parseInt(page));
+          showPill(`🔍 Found on page ${page}`, "#4ade80");
+          return;
+        }
+      }
+
+      showPill("❌ Not found", "#f43f5e");
+    }
+
+    async function rerenderAtScale() {
+      if (!pdfDoc) return;
+
+      for (let i = 0; i < pageElements.length; i++) {
+        const el = pageElements[i];
+        const page = await pdfDoc.getPage(el.pageNum);
+        const viewport = page.getViewport({ scale });
+
+        el.wrapper.style.width = viewport.width + "px";
+        el.wrapper.style.height = viewport.height + "px";
+
+        [el.pdfCanvas, el.hlCanvas, el.inkCanvas].forEach(c => {
+          c.width = viewport.width;
+          c.height = viewport.height;
+        });
+
+        const ctx = el.pdfCanvas.getContext("2d");
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        redrawHighlights(el.pageNum);
+        redrawPenStrokes(el.pageNum);
+      }
+
+      zoomInfo.textContent = `${Math.round(scale * 100)}%`;
+    }
+
+    function setupIntersectionObserver() {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          let maxRatio = 0;
+          let maxPage = currentPage;
+          entries.forEach(entry => {
+            if (entry.intersectionRatio > maxRatio) {
+              maxRatio = entry.intersectionRatio;
+              maxPage = parseInt(entry.target.dataset.page);
+            }
+          });
+          if (maxRatio > 0.1) {
+            currentPage = maxPage;
+            updatePageInfo();
+          }
+        },
+        { root: pdfArea, threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0] }
+      );
+
+      pageElements.forEach(el => observer.observe(el.wrapper));
+    }
+
+    function updatePageInfo() {
+      pageInfo.textContent = `${currentPage} / ${totalPages}`;
+      zoomInfo.textContent = `${Math.round(scale * 100)}%`;
+    }
+
+    function scrollToPage(pageNum) {
+      const el = pageElements[pageNum - 1];
+      if (!el) return;
+      el.wrapper.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // HIGHLIGHT SYSTEM
+    // ═══════════════════════════════════════════════════════════════
+    function getPageUnderCursor(tip) {
+      // Convert normalized tip to screen coordinates
+      const sx = (tip.x) * window.innerWidth;
+      const sy = tip.y * window.innerHeight;
+
+      for (const el of pageElements) {
+        const rect = el.wrapper.getBoundingClientRect();
+        if (sx >= rect.left && sx <= rect.right && sy >= rect.top && sy <= rect.bottom) {
+          return el;
+        }
+      }
+      // Fallback: return the current page element
+      return pageElements[currentPage - 1] || null;
+    }
+
+    function screenToPage(tip, pageEl) {
+      const rect = pageEl.wrapper.getBoundingClientRect();
+      const sx = (tip.x) * window.innerWidth;
+      const sy = tip.y * window.innerHeight;
       return {
-        x: x / overlayCanvas.width,
-        y: y / overlayCanvas.height,
-        w: w / overlayCanvas.width,
-        h: h / overlayCanvas.height,
-        color: state.highlightColor
+        x: (sx - rect.left) / rect.width,
+        y: (sy - rect.top) / rect.height
       };
     }
 
-    function canvasRectFromNormalized(rect) {
-      return {
-        x: rect.x * overlayCanvas.width,
-        y: rect.y * overlayCanvas.height,
-        w: rect.w * overlayCanvas.width,
-        h: rect.h * overlayCanvas.height,
-        color: rect.color
-      };
+    // Highlighter strokes are stored in highlights as freehand paths (like pen but thicker + transparent)
+    function addHighlighterPoint(pageNum, normX, normY) {
+      if (!highlights[pageNum]) highlights[pageNum] = [];
+      if (!currentStroke) {
+        currentStroke = {
+          points: [],
+          color: activeColor,
+          pageNum: pageNum,
+          id: annotationIdCounter++,
+          timestamp: Date.now(),
+          type: "highlighter"
+        };
+        highlights[pageNum].push(currentStroke);
+      }
+      currentStroke.points.push({ x: normX, y: normY });
+      redrawHighlights(pageNum);
     }
 
-    function drawHighlights(pageNumber, liveRect = null) {
-      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-      const rects = state.highlights[pageNumber] || [];
+    function redrawHighlights(pageNum) {
+      const el = pageElements[pageNum - 1];
+      if (!el) return;
+      const ctx = el.hlCanvas.getContext("2d");
+      const W = el.hlCanvas.width, H = el.hlCanvas.height;
+      ctx.clearRect(0, 0, W, H);
 
-      rects.forEach((rect) => {
-        const scaled = canvasRectFromNormalized(rect);
-        overlayCtx.save();
-        overlayCtx.globalAlpha = 0.36;
-        overlayCtx.fillStyle = scaled.color;
-        overlayCtx.fillRect(scaled.x, scaled.y, scaled.w, scaled.h);
-        overlayCtx.restore();
+      (highlights[pageNum] || []).forEach(h => {
+        if (!h.points || h.points.length < 2) return;
+        ctx.beginPath();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 18; // thick highlighter
+        ctx.strokeStyle = h.color;
+        ctx.globalAlpha = 0.35;
+
+        const first = h.points[0];
+        ctx.moveTo(first.x * W, first.y * H);
+        for (let i = 1; i < h.points.length; i++) {
+          ctx.lineTo(h.points[i].x * W, h.points[i].y * H);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PEN / INK SYSTEM
+    // ═══════════════════════════════════════════════════════════════
+    function addPenPoint(pageNum, normX, normY) {
+      if (!penStrokes[pageNum]) penStrokes[pageNum] = [];
+      if (!currentStroke) {
+        currentStroke = {
+          points: [],
+          color: activeColor,
+          pageNum: pageNum,
+          id: annotationIdCounter++,
+          timestamp: Date.now()
+        };
+        penStrokes[pageNum].push(currentStroke);
+      }
+      currentStroke.points.push({ x: normX, y: normY });
+      redrawPenStrokes(pageNum);
+    }
+
+    function finishPenStroke() {
+      if (currentStroke && currentStroke.points.length >= 2) {
+        refreshNotesPanel();
+      }
+      if (currentStroke && currentStroke.points.length > 20) {
+        captureCanvasAndSearch();
+      }
+      currentStroke = null;
+    }
+
+    async function processHandwritingAndSearch(imageData) {
+      try {
+        const res = await fetch("http://localhost:8000/ocr", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ image: imageData })
+        });
+
+        const result = await res.json();
+
+        console.log("OCR TEXT:", result.text);
+
+        const cleaned = result.text.trim().toLowerCase();
+        searchTextAndJump(cleaned);
+
+      } catch (err) {
+        console.error("OCR Error:", err);
+        showPill("OCR failed", "#f43f5e");
+      }
+    }
+
+    function captureCanvasAndSearch() {
+      const canvas = pageElements[currentPage - 1].inkCanvas;
+      const data = canvas.toDataURL();
+
+      //integrating model here
+      processHandwritingAndSearch(data);
+    }
+
+    function redrawPenStrokes(pageNum) {
+      const el = pageElements[pageNum - 1];
+      if (!el) return;
+      const ctx = el.inkCanvas.getContext("2d");
+      const W = el.inkCanvas.width, H = el.inkCanvas.height;
+      ctx.clearRect(0, 0, W, H);
+
+      const strokes = penStrokes[pageNum] || [];
+      strokes.forEach(stroke => {
+        if (stroke.points.length < 2) return;
+        ctx.beginPath();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = stroke.color;
+        ctx.globalAlpha = 0.85;
+
+        const first = stroke.points[0];
+        ctx.moveTo(first.x * W, first.y * H);
+        for (let i = 1; i < stroke.points.length; i++) {
+          const p = stroke.points[i];
+          ctx.lineTo(p.x * W, p.y * H);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // SCROLL INERTIA SYSTEM
+    // ═══════════════════════════════════════════════════════════════
+    function startInertia() {
+      if (Math.abs(scrollVelocity) < 0.5) return;
+      scrollInertiaActive = true;
+      inertiaStep();
+    }
+
+    function stopInertia() {
+      scrollInertiaActive = false;
+      if (scrollInertiaRAF) {
+        cancelAnimationFrame(scrollInertiaRAF);
+        scrollInertiaRAF = null;
+      }
+    }
+
+    function inertiaStep() {
+      if (!scrollInertiaActive) return;
+      scrollVelocity *= 0.92;
+      if (Math.abs(scrollVelocity) < 0.3) {
+        scrollInertiaActive = false;
+        scrollVelocity = 0;
+        return;
+      }
+      pdfArea.scrollTop += scrollVelocity;
+      scrollInertiaRAF = requestAnimationFrame(inertiaStep);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // VIRTUAL TOOLBAR HOVER SYSTEM
+    // ═══════════════════════════════════════════════════════════════
+    function clearVirtualHover() {
+      if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+      hoverStartTime = 0;
+      currentHoveredBtn = null;
+      virtualBtns.forEach(b => b.classList.remove("hover-highlight"));
+    }
+
+    function checkVirtualToolbarHover(sx, sy) {
+      const toolbarEl = document.getElementById("virtual-toolbar");
+      const toolbarRect = toolbarEl.getBoundingClientRect();
+
+      // Quick check: is cursor in the toolbar region?
+      if (sx < toolbarRect.left - 20 || sx > toolbarRect.right + 20 ||
+        sy < toolbarRect.top - 20 || sy > toolbarRect.bottom + 20) {
+        clearVirtualHover();
+        return false;
+      }
+
+      let hovered = null;
+      virtualBtns.forEach(btn => {
+        const rect = btn.getBoundingClientRect();
+        if (sx >= rect.left && sx <= rect.right && sy >= rect.top && sy <= rect.bottom) {
+          hovered = btn;
+        }
       });
 
-      if (liveRect) {
-        overlayCtx.save();
-        overlayCtx.globalAlpha = 0.45;
-        overlayCtx.fillStyle = liveRect.color;
-        overlayCtx.fillRect(liveRect.x, liveRect.y, liveRect.w, liveRect.h);
-        overlayCtx.restore();
+      if (hovered && hovered !== currentHoveredBtn) {
+        clearVirtualHover();
+        currentHoveredBtn = hovered;
+        hoverStartTime = performance.now();
+        hovered.classList.add("hover-highlight");
+        hoverTimer = setTimeout(() => {
+          const tool = hovered.dataset.tool;
+          if (tool) {
+            setActiveTool(tool);
+            showPill(`🎯 ${tool.charAt(0).toUpperCase() + tool.slice(1)} selected`, "#22d3ee");
+          }
+          clearVirtualHover();
+        }, HOVER_DURATION);
+        return true;
+      } else if (hovered && hovered === currentHoveredBtn) {
+        return true; // still hovering same button
+      } else if (!hovered) {
+        clearVirtualHover();
+      }
+      return false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // GESTURE HANDLERS
+    // ═══════════════════════════════════════════════════════════════
+    const now = () => performance.now() / 1000; // seconds
+
+    function handlePoint(lm) {
+      // INDEX FINGER = ALWAYS POINTER CURSOR
+      const tip = lm[8];
+      const t = now();
+      let sx = (tip.x) * cursorCanvas.width;
+      let sy = tip.y * cursorCanvas.height;
+
+      // Apply pointer-specific One Euro Filter
+      sx = ptrFilterX.filter(sx, t);
+      sy = ptrFilterY.filter(sy, t);
+
+      cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+
+      // Check virtual toolbar hover (tool selection via dwell)
+      const isHoveringToolbar = checkVirtualToolbarHover(sx, sy);
+
+      // Always draw laser cursor
+      drawLaserCursor(sx, sy, "#a78bfa");
+
+      if (isHoveringToolbar) {
+        showPill("🎯 Hover to select tool", "#22d3ee");
+      } else {
+        showPill("☝️ Pointer", "#a78bfa");
       }
     }
 
-    function showGesture(text, color) {
-      gestureLabel.textContent = text;
-      gestureLabel.style.color = color;
-      gestureLabel.style.display = "block";
-      gestureStatusCopy.textContent = text;
-      clearTimeout(state.gestureTimer);
-      state.gestureTimer = setTimeout(() => {
-        gestureLabel.style.display = "none";
-      }, 1200);
+    function handlePeace(lm) {
+      // TWO FINGERS = DRAW WITH ACTIVE TOOL (pen or highlighter)
+      const tip = lm[8];
+      const t = now();
+
+      const pageEl = getPageUnderCursor(tip);
+      if (!pageEl) return;
+
+      const coords = screenToPage(tip, pageEl);
+      // Use drawing-specific filters (separate from pointer)
+      const filteredX = drawFilterX.filter(coords.x, t);
+      const filteredY = drawFilterY.filter(coords.y, t);
+
+      // Calculate screen position for cursor display
+      const rect = pageEl.wrapper.getBoundingClientRect();
+      const screenX = rect.left + filteredX * rect.width;
+      const screenY = rect.top + filteredY * rect.height;
+
+      cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+
+      if (activeTool === "pen") {
+        addPenPoint(pageEl.pageNum, filteredX, filteredY);
+        drawPenCursor(screenX, screenY, activeColor);
+        showPill("✍️ Drawing", activeColor);
+      } else {
+        // highlighter
+        addHighlighterPoint(pageEl.pageNum, filteredX, filteredY);
+        drawHighlighterCursor(screenX, screenY, activeColor);
+        showPill("🟡 Highlighting", activeColor);
+      }
     }
 
-    function dist2D(a, b) {
-      return Math.hypot(a.x - b.x, a.y - b.y);
+    function drawLaserCursor(sx, sy, color) {
+      // Outer glow
+      const gradient = cursorCtx.createRadialGradient(sx, sy, 0, sx, sy, 18);
+      gradient.addColorStop(0, `${color}66`);
+      gradient.addColorStop(1, `${color}00`);
+      cursorCtx.fillStyle = gradient;
+      cursorCtx.fillRect(sx - 18, sy - 18, 36, 36);
+
+      // Outer ring
+      cursorCtx.beginPath();
+      cursorCtx.arc(sx, sy, 8, 0, Math.PI * 2);
+      cursorCtx.strokeStyle = `${color}b3`;
+      cursorCtx.lineWidth = 1.5;
+      cursorCtx.stroke();
+
+      // Inner dot
+      cursorCtx.beginPath();
+      cursorCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+      cursorCtx.fillStyle = color;
+      cursorCtx.fill();
     }
 
-    function getGesture(hand) {
-      const thumbTip = hand[4];
-      const indexTip = hand[8];
-      const middleTip = hand[12];
-      const ringTip = hand[16];
-      const pinkyTip = hand[20];
-      const indexMcp = hand[5];
-      const middleMcp = hand[9];
-      const ringMcp = hand[13];
-      const pinkyMcp = hand[17];
-      const wrist = hand[0];
+    function drawPenCursor(sx, sy, color) {
+      // Filled dot
+      cursorCtx.beginPath();
+      cursorCtx.arc(sx, sy, 5, 0, Math.PI * 2);
+      cursorCtx.fillStyle = color;
+      cursorCtx.globalAlpha = 0.85;
+      cursorCtx.fill();
+      cursorCtx.globalAlpha = 1;
 
-      const indexUp = indexTip.y < indexMcp.y;
-      const middleUp = middleTip.y < middleMcp.y;
-      const ringUp = ringTip.y < ringMcp.y;
-      const pinkyUp = pinkyTip.y < pinkyMcp.y;
-      const pinchDist = dist2D(thumbTip, indexTip);
-
-      if (indexUp && middleUp && !ringUp && !pinkyUp) {
-        return { type: "highlight", indexTip };
-      }
-
-      if (indexUp && !middleUp && !ringUp && !pinkyUp) {
-        return { type: "point", indexTip };
-      }
-
-      if (indexUp && middleUp && ringUp && pinkyUp) {
-        return { type: "open", wrist };
-      }
-
-      return { type: "pinch", pinchDist, indexTip };
+      // Ring
+      cursorCtx.beginPath();
+      cursorCtx.arc(sx, sy, 10, 0, Math.PI * 2);
+      cursorCtx.strokeStyle = color;
+      cursorCtx.lineWidth = 1.5;
+      cursorCtx.stroke();
     }
 
-    async function fitToWidth(pageNumber = state.currentPage) {
-      if (!state.pdfDoc) {
+    function drawHighlighterCursor(sx, sy, color) {
+      // Wide translucent bar cursor
+      cursorCtx.globalAlpha = 0.3;
+      cursorCtx.fillStyle = color;
+      cursorCtx.fillRect(sx - 12, sy - 12, 24, 24);
+      cursorCtx.globalAlpha = 1;
+
+      // Small center dot
+      cursorCtx.beginPath();
+      cursorCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+      cursorCtx.fillStyle = color;
+      cursorCtx.fill();
+    }
+
+    function handleFist(lm) {
+      const wy = lm[0].y;
+      const t = now();
+
+      if (prevWristY !== null) {
+        const rawDy = wy - prevWristY;
+
+        // Dead-zone: ignore micro-movements
+        if (Math.abs(rawDy) < 0.005) {
+          prevWristY = wy;
+          showPill("✊ Scroll (hold)", "#fbbf24");
+          return;
+        }
+
+        // Apply filter to velocity
+        const filteredDy = scrollFilter.filter(rawDy, t);
+
+        // Velocity accumulator with exponential smoothing
+        const rawVelocity = filteredDy * 1200;
+        scrollVelocity = scrollVelocity * 0.6 + rawVelocity * 0.4;
+
+        // Cap velocity
+        scrollVelocity = Math.max(-60, Math.min(60, scrollVelocity));
+
+        pdfArea.scrollTop += scrollVelocity;
+      }
+
+      prevWristY = wy;
+      showPill("✊ Scrolling", "#fbbf24");
+    }
+
+    function handleOpen(lm) {
+      openStableFrames++;
+
+      if (pageCooldown > 0) {
+        pageCooldown--;
         return;
       }
-      const page = await state.pdfDoc.getPage(pageNumber);
-      const baseViewport = page.getViewport({ scale: 1 });
-      const availableWidth = Math.max(viewerArea.clientWidth - 64, 300);
-      state.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, availableWidth / baseViewport.width));
-      state.fitMode = true;
-      queueRender(pageNumber, "fit");
-    }
 
-    async function renderPage(pageNumber) {
-      if (!state.pdfDoc) {
+      // Two-phase: must be stable for 12 frames before swipe detection
+      if (openStableFrames < 12) {
+        prevWristX = lm[0].x; // set baseline
+        showPill("✋ Ready to swipe...", "#60a5fa");
         return;
       }
 
-      state.rendering = true;
-      const page = await state.pdfDoc.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: state.scale });
+      const wx = lm[0].x;
+      if (prevWristX !== null) {
+        const dx = wx - prevWristX;
 
-      pdfCanvas.width = viewport.width;
-      pdfCanvas.height = viewport.height;
-      overlayCanvas.width = viewport.width;
-      overlayCanvas.height = viewport.height;
-      viewerCard.style.display = "block";
-      dropZone.style.display = "none";
+        // Larger threshold to prevent false triggers
+        if (dx > 0.10 && currentPage > 1) {
+          // Swipe right → prev page
+          scrollToPage(currentPage - 1);
+          pageCooldown = 40;
+          prevWristX = null;
+          openStableFrames = 0;
+          showPill("⬅️ Previous Page", "#60a5fa");
+          return;
+        } else if (dx < -0.10 && currentPage < totalPages) {
+          // Swipe left → next page
+          scrollToPage(currentPage + 1);
+          pageCooldown = 40;
+          prevWristX = null;
+          openStableFrames = 0;
+          showPill("➡️ Next Page", "#f472b6");
+          return;
+        }
+      }
+      prevWristX = wx;
+      showPill("✋ Swipe to navigate", "#60a5fa");
+    }
 
-      await page.render({
-        canvasContext: pdfCtx,
-        viewport
-      }).promise;
+    function handlePinch(lm) {
+      if (pinchStartDist === null) return;
+      const curr = dist(lm[4], lm[8]);
+      const ratio = curr / pinchStartDist;
 
-      drawHighlights(pageNumber);
-      updateDocMeta();
-      state.rendering = false;
-
-      if (state.pendingPage !== null) {
-        const nextPage = state.pendingPage;
-        state.pendingPage = null;
-        queueRender(nextPage, state.pendingReason);
+      if (ratio > 1.35 && lastZoomAction !== "in") {
+        scale = Math.min(MAX_SCALE, scale + 0.2);
+        rerenderAtScale();
+        pinchStartDist = curr;
+        lastZoomAction = "in";
+        showPill("🔍 Zoom In", "#4ade80");
+      } else if (ratio < 0.65 && lastZoomAction !== "out") {
+        scale = Math.max(MIN_SCALE, scale - 0.2);
+        rerenderAtScale();
+        pinchStartDist = curr;
+        lastZoomAction = "out";
+        showPill("🔍 Zoom Out", "#f43f5e");
+      } else {
+        showPill("🤏 Pinch zoom", "#22d3ee");
       }
     }
 
-    function queueRender(pageNumber, reason = "manual") {
-      if (!state.pdfDoc) {
-        return;
-      }
-      if (state.rendering) {
-        state.pendingPage = pageNumber;
-        state.pendingReason = reason;
-        return;
-      }
-      state.currentPage = pageNumber;
-      renderPage(pageNumber).catch((error) => {
-        console.error("Failed to render PDF page", error);
-        showGesture("Could not render page", "var(--red)");
-        state.rendering = false;
-      });
-    }
+    // ═══════════════════════════════════════════════════════════════
+    // HAND SKELETON DRAWING (sidebar camera)
+    // ═══════════════════════════════════════════════════════════════
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
+    ];
 
-    async function loadPdfFromSource(src, fileName) {
-      if (state.objectUrl) {
-        URL.revokeObjectURL(state.objectUrl);
-        state.objectUrl = null;
-      }
+    function drawSkeleton(lm) {
+      const w = handCanvasEl.width, h = handCanvasEl.height;
+      handCtx.clearRect(0, 0, w, h);
+      handCtx.drawImage(webcamVideo, 0, 0, w, h);
 
-      if (typeof src === "string" && src.startsWith("blob:")) {
-        state.objectUrl = src;
-      }
-
-      const loadingTask = pdfjsLib.getDocument(src);
-      state.pdfDoc = await loadingTask.promise;
-      state.totalPages = state.pdfDoc.numPages;
-      state.currentPage = 1;
-      state.docName = fileName || "Untitled PDF";
-      pageSlider.min = "1";
-      pageSlider.max = String(state.totalPages);
-      state.fitMode = true;
-      await fitToWidth(1);
-      updateDocMeta();
-    }
-
-    async function handlePdfFile(file) {
-      if (!file || file.type !== "application/pdf") {
-        showGesture("Please choose a PDF file", "var(--red)");
-        return;
-      }
-      const url = URL.createObjectURL(file);
-      await loadPdfFromSource(url, file.name);
-    }
-
-    function movePage(delta) {
-      if (!state.pdfDoc) {
-        return;
-      }
-      const nextPage = Math.min(state.totalPages, Math.max(1, state.currentPage + delta));
-      if (nextPage !== state.currentPage) {
-        queueRender(nextPage, "page");
-      }
-    }
-
-    function setZoom(nextScale) {
-      if (!state.pdfDoc) {
-        return;
-      }
-      const clamped = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
-      if (Math.abs(clamped - state.scale) < 0.01) {
-        return;
-      }
-      state.scale = clamped;
-      state.fitMode = false;
-      queueRender(state.currentPage, "zoom");
-    }
-
-    function clearPageHighlights() {
-      if (!state.pdfDoc) {
-        return;
-      }
-      state.highlights[state.currentPage] = [];
-      drawHighlights(state.currentPage);
-      updateDocMeta();
-    }
-
-    function clearAllHighlights() {
-      state.highlights = {};
-      drawHighlights(state.currentPage);
-      updateDocMeta();
-    }
-
-    function exportHighlights() {
-      const payload = {
-        document: state.docName,
-        pages: state.totalPages,
-        highlights: state.highlights
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "pdf-highlights.json";
-      link.click();
-      URL.revokeObjectURL(url);
-    }
-
-    function drawCursor(x, y) {
-      overlayCtx.save();
-      overlayCtx.beginPath();
-      overlayCtx.arc(x, y, 11, 0, Math.PI * 2);
-      overlayCtx.strokeStyle = "#55d6ff";
-      overlayCtx.lineWidth = 3;
-      overlayCtx.stroke();
-      overlayCtx.beginPath();
-      overlayCtx.arc(x, y, 4, 0, Math.PI * 2);
-      overlayCtx.fillStyle = "#55d6ff";
-      overlayCtx.fill();
-      overlayCtx.restore();
-    }
-
-    function drawSkeleton(landmarks) {
-      const width = handCanvas.width;
-      const height = handCanvas.height;
-      const connections = [
-        [0, 1], [1, 2], [2, 3], [3, 4],
-        [0, 5], [5, 6], [6, 7], [7, 8],
-        [5, 9], [9, 10], [10, 11], [11, 12],
-        [9, 13], [13, 14], [14, 15], [15, 16],
-        [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
-      ];
-
-      handCtx.clearRect(0, 0, width, height);
-      handCtx.strokeStyle = "rgba(85, 214, 255, 0.9)";
+      // Connections
       handCtx.lineWidth = 2;
-
-      connections.forEach(([a, b]) => {
-        const start = landmarks[a];
-        const end = landmarks[b];
+      HAND_CONNECTIONS.forEach(([a, b]) => {
+        handCtx.strokeStyle = "rgba(74, 222, 128, 0.6)";
         handCtx.beginPath();
-        handCtx.moveTo((1 - start.x) * width, start.y * height);
-        handCtx.lineTo((1 - end.x) * width, end.y * height);
+        handCtx.moveTo((1 - lm[a].x) * w, lm[a].y * h);
+        handCtx.lineTo((1 - lm[b].x) * w, lm[b].y * h);
         handCtx.stroke();
       });
 
-      landmarks.forEach((point, index) => {
+      // Joints
+      lm.forEach((pt, i) => {
         handCtx.beginPath();
-        handCtx.arc((1 - point.x) * width, point.y * height, index === 8 ? 6 : 4, 0, Math.PI * 2);
-        handCtx.fillStyle = index === 8 ? "#ffd166" : "rgba(85, 214, 255, 0.95)";
+        const r = i === 8 ? 5 : (i === 4 ? 4 : 2.5);
+        handCtx.arc((pt.x) * w, pt.y * h, r, 0, Math.PI * 2);
+        handCtx.fillStyle = i === 8 ? "#fbbf24" : (i === 4 ? "#22d3ee" : "#60a5fa");
         handCtx.fill();
       });
     }
 
-    async function initHandLandmarker() {
-      if (state.handLandmarker) {
-        return state.handLandmarker;
+    // ═══════════════════════════════════════════════════════════════
+    // GESTURE PILL INDICATOR
+    // ═══════════════════════════════════════════════════════════════
+    let pillTimer = null;
+
+    function showPill(text, color) {
+      pillText.textContent = text;
+      pillDot.style.background = color;
+      gesturePill.classList.add("visible");
+
+      // Also update sidebar badge
+      gestureBadge.textContent = text;
+      gestureBadge.style.color = color;
+      gestureBadge.style.display = "block";
+
+      clearTimeout(pillTimer);
+      pillTimer = setTimeout(() => {
+        gesturePill.classList.remove("visible");
+        gestureBadge.style.display = "none";
+      }, 1000);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // NOTES PANEL
+    // ═══════════════════════════════════════════════════════════════
+    function refreshNotesPanel() {
+      const allNotes = [];
+
+      // Collect highlights
+      Object.entries(highlights).forEach(([pageNum, items]) => {
+        items.forEach(h => {
+          allNotes.push({
+            type: "highlight",
+            color: h.color,
+            page: parseInt(pageNum),
+            id: h.id,
+            timestamp: h.timestamp
+          });
+        });
+      });
+
+      // Collect pen strokes
+      Object.entries(penStrokes).forEach(([pageNum, items]) => {
+        items.forEach(s => {
+          if (s.points.length >= 2) {
+            allNotes.push({
+              type: "pen",
+              color: s.color,
+              page: parseInt(pageNum),
+              id: s.id,
+              timestamp: s.timestamp
+            });
+          }
+        });
+      });
+
+      // Sort by timestamp
+      allNotes.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      if (allNotes.length === 0) {
+        notesList.innerHTML = '<div class="notes-empty">No annotations yet</div>';
+        return;
       }
 
-      const vision = await FilesetResolver.forVisionTasks("/static/vendor/mediapipe/wasm");
-      state.handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      notesList.innerHTML = "";
+      allNotes.forEach(note => {
+        const item = document.createElement("div");
+        item.className = "note-item";
+        item.innerHTML = `
+          <div class="note-color-dot" style="background:${note.color}"></div>
+          <div class="note-info">
+            <span class="note-page">Page ${note.page}</span>
+            <span class="note-type">${note.type === "highlight" ? "Highlight" : "Pen stroke"}</span>
+          </div>
+          <button class="note-delete" data-id="${note.id}" data-type="${note.type}" data-page="${note.page}" title="Delete">✕</button>
+        `;
+
+        // Click to navigate
+        item.addEventListener("click", (e) => {
+          if (e.target.classList.contains("note-delete")) return;
+          scrollToPage(note.page);
+        });
+
+        // Delete button
+        item.querySelector(".note-delete").addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteAnnotation(note.type, note.page, note.id);
+        });
+
+        notesList.appendChild(item);
+      });
+    }
+
+    function deleteAnnotation(type, page, id) {
+      if (type === "highlight") {
+        highlights[page] = (highlights[page] || []).filter(h => h.id !== id);
+        redrawHighlights(page);
+      } else {
+        penStrokes[page] = (penStrokes[page] || []).filter(s => s.id !== id);
+        redrawPenStrokes(page);
+      }
+      refreshNotesPanel();
+    }
+
+    function clearAllAnnotations() {
+      highlights = {};
+      penStrokes = {};
+      pageElements.forEach(el => {
+        el.hlCanvas.getContext("2d").clearRect(0, 0, el.hlCanvas.width, el.hlCanvas.height);
+        el.inkCanvas.getContext("2d").clearRect(0, 0, el.inkCanvas.width, el.inkCanvas.height);
+      });
+      refreshNotesPanel();
+    }
+
+    function exportAnnotations() {
+      const data = {
+        exportDate: new Date().toISOString(),
+        highlights,
+        penStrokes
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "pdf-annotations.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function exportAnnotatedPDF() {
+      const existingPdfBytes = await fetch(currentPDFUrl).then(res => res.arrayBuffer());
+      const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
+
+      for (let i = 0; i < pageElements.length; i++) {
+        const page = pdfDoc.getPage(i);
+        const { width, height } = page.getSize();
+
+        (penStrokes[i + 1] || []).forEach(s => {
+          for (let j = 1; j < s.points.length; j++) {
+            const p1 = s.points[j - 1];
+            const p2 = s.points[j];
+
+            page.drawLine({
+              start: { x: p1.x * width, y: height - p1.y * height },
+              end: { x: p2.x * width, y: height - p2.y * height },
+              thickness: 2,
+              color: PDFLib.rgb(0, 0, 0),
+            });
+          }
+        });
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "annotated.pdf";
+      a.click();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DETECTION LOOP
+    // ═══════════════════════════════════════════════════════════════
+    function resizeCursorCanvas() {
+      cursorCanvas.width = window.innerWidth;
+      cursorCanvas.height = window.innerHeight;
+    }
+    resizeCursorCanvas();
+    window.addEventListener("resize", resizeCursorCanvas);
+
+    async function detectLoop() {
+      let lastDetectionTime = 0;
+      const DETECTION_INTERVAL = 40; // milliseconds
+      if (!webcamRunning || !handLandmarker) {
+        requestAnimationFrame(detectLoop);
+        return;
+      }
+
+      if (webcamVideo.currentTime === lastVideoTime) {
+        requestAnimationFrame(detectLoop);
+        return;
+      }
+
+      lastVideoTime = webcamVideo.currentTime;
+      handCanvasEl.width = webcamVideo.videoWidth;
+      handCanvasEl.height = webcamVideo.videoHeight;
+
+      const nowTime = performance.now();
+
+      if (nowTime - lastDetectTime < DETECT_INTERVAL) {
+        requestAnimationFrame(detectLoop);
+        return;
+      }
+
+      lastDetectTime = nowTime;
+
+      const results = handLandmarker.detectForVideo(webcamVideo, nowTime);
+
+      if (results.landmarks && results.landmarks.length > 0) {
+        const lm = results.landmarks[0];
+        lastLandmarks = lm;
+        drawSkeleton(lm);
+
+        const raw = classifyGesture(lm);
+        const stable = updateGestureState(raw);
+
+        // Dispatch to handler
+        switch (stable) {
+          case "point": handlePoint(lm); break;
+          case "peace": handlePeace(lm); break;
+          case "fist": handleFist(lm); break;
+          case "open": handleOpen(lm); break;
+          case "pinch": handlePinch(lm); break;
+          default:
+            cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+            break;
+        }
+      } else {
+        // No hand detected
+        if (activeGesture !== "none") {
+          onGestureExit(activeGesture);
+          lastActiveGesture = activeGesture;
+          activeGesture = "none";
+        }
+        rawGesture = "none";
+        rawCount = 0;
+        releaseCount = 0;
+        prevWristX = null;
+        prevWristY = null;
+        openStableFrames = 0;
+        ptrFilterX.reset();
+        ptrFilterY.reset();
+        drawFilterX.reset();
+        drawFilterY.reset();
+        scrollFilter.reset();
+        if (currentStroke) finishPenStroke();
+
+        // Clear sidebar cam
+        handCtx.clearRect(0, 0, handCanvasEl.width, handCanvasEl.height);
+        handCtx.drawImage(webcamVideo, 0, 0, handCanvasEl.width, handCanvasEl.height);
+
+        cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+      }
+
+      requestAnimationFrame(detectLoop);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CAMERA & MEDIAPIPE INIT
+    // ═══════════════════════════════════════════════════════════════
+    async function initHandLandmarker() {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+      );
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: "/hand_landmarker.task",
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
           delegate: "GPU"
         },
         runningMode: "VIDEO",
         numHands: 1
       });
-      return state.handLandmarker;
     }
 
-    async function startCamera() {
-      if (state.webcamRunning) {
-        return;
-      }
-
-      cameraToggleBtn.disabled = true;
-      cameraToggleBtn.textContent = "Loading Camera...";
+    async function startWebcam() {
+      startBtn.disabled = true;
+      startBtn.textContent = "⏳ Loading model...";
       try {
         await initHandLandmarker();
-
-        state.stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: 640, height: 480 }
         });
-
-        webcam.srcObject = state.stream;
-        webcam.addEventListener("loadeddata", () => {
-          handCanvas.width = webcam.videoWidth;
-          handCanvas.height = webcam.videoHeight;
-          state.webcamRunning = true;
-          updateHeaderState();
-          cameraToggleBtn.disabled = false;
-          predictWebcam();
-        }, { once: true });
-      } catch (error) {
-        console.error("Unable to start camera", error);
-        state.webcamRunning = false;
-        cameraToggleBtn.disabled = false;
-        cameraToggleBtn.textContent = "Start Camera";
-        updateHeaderState();
-        showGesture("Camera access failed", "var(--red)");
+        webcamVideo.srcObject = stream;
+        webcamVideo.addEventListener("loadeddata", () => {
+          webcamRunning = true;
+          statusDot.classList.add("active");
+          camLabel.textContent = "Camera live";
+          startBtn.textContent = "✅ Camera On";
+          detectLoop();
+        });
+      } catch (err) {
+        console.error("Camera error:", err);
+        startBtn.textContent = "❌ Camera failed";
+        startBtn.disabled = false;
       }
     }
 
-    function endHighlight() {
-      if (!state.isHighlighting || !state.highlightStart || !state.pdfDoc) {
-        state.isHighlighting = false;
-        state.highlightStart = null;
-        return;
-      }
+    // ═══════════════════════════════════════════════════════════════
+    // LOAD PDF
+    // ═══════════════════════════════════════════════════════════════
+    let currentPDFUrl = null;
+    async function loadPDF(src) {
+      currentPDFUrl = src;
+      try {
+        pdfDoc = await pdfjsLib.getDocument(src).promise;
+        totalPages = pdfDoc.numPages;
+        currentPage = 1;
+        highlights = {};
+        penStrokes = {};
+        annotationIdCounter = 0;
 
-      const rect = normalizedRectFromCanvas(
-        state.highlightStart.x,
-        state.highlightStart.y,
-        state.highlightStart.x2,
-        state.highlightStart.y2
-      );
+        dropZone.style.display = "none";
+        pdfContainer.style.display = "flex";
+        toolbar.style.display = "flex";
 
-      if (rect.w > 0.01 && rect.h > 0.01) {
-        if (!state.highlights[state.currentPage]) {
-          state.highlights[state.currentPage] = [];
-        }
-        state.highlights[state.currentPage].push(rect);
-        updateDocMeta();
-      }
-
-      state.isHighlighting = false;
-      state.highlightStart = null;
-      drawHighlights(state.currentPage);
-    }
-
-    async function predictWebcam() {
-      if (!state.webcamRunning || !state.handLandmarker) {
-        return;
-      }
-
-      if (webcam.currentTime !== state.videoTime) {
-        state.videoTime = webcam.currentTime;
-        const results = state.handLandmarker.detectForVideo(webcam, performance.now());
-
-        if (results.landmarks && results.landmarks.length > 0) {
-          const hand = results.landmarks[0];
-          const gesture = getGesture(hand);
-          drawSkeleton(hand);
-          if (state.pdfDoc) {
-            drawHighlights(state.currentPage);
-          }
-
-          if (gesture.type === "pinch") {
-            if (state.prevPinchDist !== null && state.pdfDoc) {
-              const delta = (gesture.pinchDist - state.prevPinchDist) * 8;
-              setZoom(state.scale + delta);
-            }
-            state.prevPinchDist = gesture.pinchDist;
-            showGesture("Pinch zoom", "#55e5a4");
-            state.lastOpenHandX = null;
-            if (state.isHighlighting) {
-              endHighlight();
-            }
-          } else {
-            state.prevPinchDist = null;
-          }
-
-          if (gesture.type === "open") {
-            if (state.pageCooldown > 0) {
-              state.pageCooldown -= 1;
-            } else if (state.lastOpenHandX !== null) {
-              const deltaX = gesture.wrist.x - state.lastOpenHandX;
-              if (deltaX > PAGE_SWIPE_THRESHOLD && state.currentPage > 1) {
-                movePage(-1);
-                state.pageCooldown = PAGE_COOLDOWN_FRAMES;
-                showGesture("Previous page", "#55d6ff");
-              } else if (deltaX < -PAGE_SWIPE_THRESHOLD && state.currentPage < state.totalPages) {
-                movePage(1);
-                state.pageCooldown = PAGE_COOLDOWN_FRAMES;
-                showGesture("Next page", "#ff8fa3");
-              }
-            }
-            state.lastOpenHandX = gesture.wrist.x;
-          } else {
-            state.lastOpenHandX = null;
-            state.pageCooldown = Math.max(0, state.pageCooldown - 1);
-          }
-
-          if (gesture.type === "highlight" && state.pdfDoc) {
-            const x = (1 - gesture.indexTip.x) * overlayCanvas.width;
-            const y = gesture.indexTip.y * overlayCanvas.height;
-            if (!state.isHighlighting) {
-              state.isHighlighting = true;
-              state.highlightStart = { x, y, x2: x, y2: y };
-            }
-            state.highlightStart.x2 = x;
-            state.highlightStart.y2 = y;
-            const liveRect = {
-              x: Math.min(state.highlightStart.x, x),
-              y: Math.min(state.highlightStart.y, y),
-              w: Math.abs(x - state.highlightStart.x),
-              h: Math.max(Math.abs(y - state.highlightStart.y), 24),
-              color: state.highlightColor
-            };
-            state.highlightStart.y2 = state.highlightStart.y + liveRect.h;
-            drawHighlights(state.currentPage, liveRect);
-            showGesture("Highlight mode", "#ffd166");
-          } else if (state.isHighlighting) {
-            endHighlight();
-          }
-
-          if (gesture.type === "point" && state.pdfDoc) {
-            const x = (1 - gesture.indexTip.x) * overlayCanvas.width;
-            const y = gesture.indexTip.y * overlayCanvas.height;
-            drawHighlights(state.currentPage);
-            drawCursor(x, y);
-            showGesture("Pointer", "#55d6ff");
-          }
-        } else {
-          handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
-          state.prevPinchDist = null;
-          state.lastOpenHandX = null;
-          if (state.isHighlighting) {
-            endHighlight();
-          }
-        }
-      }
-
-      requestAnimationFrame(predictWebcam);
-    }
-
-    function onFileDrop(event) {
-      event.preventDefault();
-      dropZone.classList.remove("drag-over");
-      const file = event.dataTransfer?.files?.[0];
-      if (file) {
-        handlePdfFile(file);
+        await renderAllPages();
+        refreshNotesPanel();
+      } catch (err) {
+        console.error("PDF load error:", err);
+        alert("Failed to load PDF. Please try another file.");
       }
     }
 
-    openFileBtn.addEventListener("click", () => fileInput.click());
-    browseCta.addEventListener("click", () => fileInput.click());
-    dropZone.addEventListener("click", () => fileInput.click());
-    dropZone.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        fileInput.click();
-      }
-    });
-    dropZone.addEventListener("dragover", (event) => {
-      event.preventDefault();
+    // ═══════════════════════════════════════════════════════════════
+    // EVENT LISTENERS
+    // ═══════════════════════════════════════════════════════════════
+    // Drag & drop
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
       dropZone.classList.add("drag-over");
     });
-    dropZone.addEventListener("dragleave", () => {
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
       dropZone.classList.remove("drag-over");
-    });
-    dropZone.addEventListener("drop", onFileDrop);
-    fileInput.addEventListener("change", async (event) => {
-      const file = event.target.files?.[0];
-      if (file) {
-        await handlePdfFile(file);
-      }
-      event.target.value = "";
-    });
-
-    document.getElementById("btn-prev").addEventListener("click", () => movePage(-1));
-    document.getElementById("btn-next").addEventListener("click", () => movePage(1));
-    document.getElementById("btn-zoom-in").addEventListener("click", () => setZoom(state.scale + 0.2));
-    document.getElementById("btn-zoom-out").addEventListener("click", () => setZoom(state.scale - 0.2));
-    document.getElementById("btn-fit").addEventListener("click", () => fitToWidth());
-    document.getElementById("btn-go").addEventListener("click", () => {
-      const nextPage = Number(pageJump.value);
-      if (state.pdfDoc && Number.isFinite(nextPage)) {
-        queueRender(Math.min(state.totalPages, Math.max(1, nextPage)), "jump");
-      }
-    });
-    document.getElementById("btn-clear-page").addEventListener("click", clearPageHighlights);
-    document.getElementById("btn-clear-all").addEventListener("click", clearAllHighlights);
-    document.getElementById("btn-export").addEventListener("click", exportHighlights);
-    startCameraBtn.addEventListener("click", startCamera);
-    cameraToggleBtn.addEventListener("click", startCamera);
-    pageSlider.addEventListener("input", () => {
-      if (state.pdfDoc) {
-        queueRender(Number(pageSlider.value), "slider");
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === "application/pdf") {
+        loadPDF(URL.createObjectURL(file));
       }
     });
 
-    document.querySelectorAll(".color-swatch").forEach((button) => {
-      button.addEventListener("click", () => {
-        document.querySelectorAll(".color-swatch").forEach((item) => item.classList.remove("selected"));
-        button.classList.add("selected");
-        state.highlightColor = button.dataset.color;
+    // File input
+    document.getElementById("file-input").addEventListener("change", e => {
+      if (e.target.files[0]) loadPDF(URL.createObjectURL(e.target.files[0]));
+    });
+
+    // Toolbar: navigation
+    document.getElementById("btn-prev").addEventListener("click", () => {
+      if (pdfDoc && currentPage > 1) scrollToPage(currentPage - 1);
+    });
+    document.getElementById("btn-next").addEventListener("click", () => {
+      if (pdfDoc && currentPage < totalPages) scrollToPage(currentPage + 1);
+    });
+
+    // Toolbar: zoom
+    document.getElementById("btn-zoom-in").addEventListener("click", () => {
+      scale = Math.min(MAX_SCALE, scale + 0.2);
+      if (pdfDoc) rerenderAtScale();
+    });
+    document.getElementById("btn-zoom-out").addEventListener("click", () => {
+      scale = Math.max(MIN_SCALE, scale - 0.2);
+      if (pdfDoc) rerenderAtScale();
+    });
+
+    // Toolbar: tool buttons
+    document.querySelectorAll(".tb-tool-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        setActiveTool(btn.dataset.tool);
       });
     });
 
-    window.addEventListener("resize", () => {
-      if (state.pdfDoc && state.fitMode) {
-        fitToWidth(state.currentPage);
+    function setActiveTool(tool) {
+      activeTool = tool;
+      // Finish any pending stroke when switching tools
+      if (currentStroke) finishPenStroke();
+      // Update toolbar buttons
+      document.querySelectorAll(".tb-tool-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.tool === tool);
+      });
+      // Update virtual toolbar buttons
+      virtualBtns.forEach(b => {
+        b.classList.toggle("active", b.dataset.tool === tool);
+      });
+    }
+
+    window.GesturePDFViewer = {
+      open: loadPDF,
+      destroy: () => {
+        webcamRunning = false;
+      }
+    };
+
+    // Toolbar: clear page
+    document.getElementById("btn-clear").addEventListener("click", () => {
+      highlights[currentPage] = [];
+      penStrokes[currentPage] = [];
+      redrawHighlights(currentPage);
+      redrawPenStrokes(currentPage);
+      refreshNotesPanel();
+    });
+
+    // Color swatches
+    document.querySelectorAll(".swatch").forEach(sw => {
+      sw.addEventListener("click", () => {
+        document.querySelectorAll(".swatch").forEach(s => s.classList.remove("selected"));
+        sw.classList.add("selected");
+        activeColor = sw.dataset.color;
+      });
+    });
+
+    // Camera button
+    startBtn.addEventListener("click", startWebcam);
+
+    // Notes panel actions
+    document.getElementById("btn-export-notes").addEventListener("click", exportAnnotations);
+    document.getElementById("btn-clear-all-notes").addEventListener("click", () => {
+      if (confirm("Clear all annotations from all pages?")) {
+        clearAllAnnotations();
       }
     });
 
-    window.addEventListener("keydown", (event) => {
-      if (!state.pdfDoc) {
+    // Keyboard shortcuts
+    document.addEventListener("keydown", e => {
+      if (!pdfDoc) return;
+      if (e.key === "ArrowLeft" || e.key === "PageUp") {
+        e.preventDefault();
+        if (currentPage > 1) scrollToPage(currentPage - 1);
+      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        if (currentPage < totalPages) scrollToPage(currentPage + 1);
+      } else if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        scale = Math.min(MAX_SCALE, scale + 0.2);
+        rerenderAtScale();
+      } else if (e.key === "-") {
+        e.preventDefault();
+        scale = Math.max(MIN_SCALE, scale - 0.2);
+        rerenderAtScale();
+      }
+    });
+
+    // Track scroll for page indicator
+    pdfArea.addEventListener("scroll", () => {
+      // Find which page is most visible
+      let bestPage = 1;
+      let bestOverlap = 0;
+      const areaRect = pdfArea.getBoundingClientRect();
+
+      pageElements.forEach(el => {
+        const rect = el.wrapper.getBoundingClientRect();
+        const overlap = Math.max(0,
+          Math.min(rect.bottom, areaRect.bottom) - Math.max(rect.top, areaRect.top)
+        );
+        if (overlap > bestOverlap) {
+          bestOverlap = overlap;
+          bestPage = el.pageNum;
+        }
+      });
+
+      if (bestPage !== currentPage) {
+        currentPage = bestPage;
+        updatePageInfo();
+      }
+    });
+
+    // 🔍 SEARCH PAD LOGIC
+    const searchPadContainer = document.getElementById("search-pad-container");
+    const searchPad = document.getElementById("search-pad");
+    const spCtx = searchPad.getContext("2d");
+
+    let drawing = false;
+
+    // open pad
+    document.getElementById("btn-search-pad").onclick = () => {
+      searchPadContainer.style.display = "block";
+    };
+
+    // close pad
+    document.getElementById("search-pad-close").onclick = () => {
+      searchPadContainer.style.display = "none";
+    };
+
+    // clear pad
+    document.getElementById("search-pad-clear").onclick = () => {
+      spCtx.clearRect(0, 0, searchPad.width, searchPad.height);
+    };
+
+    // drawing
+    searchPad.onmousedown = () => drawing = true;
+    searchPad.onmouseup = () => drawing = false;
+    searchPad.onmousemove = (e) => {
+      if (!drawing) return;
+      const rect = searchPad.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      spCtx.fillStyle = "black";
+      spCtx.beginPath();
+      spCtx.arc(x, y, 3, 0, Math.PI * 2);
+      spCtx.fill();
+    };
+
+    document.getElementById("search-pad-run").onclick = async () => {
+      const imageData = searchPad.toDataURL();
+
+      // 🚨 prevent empty search
+      if (!imageData || imageData.length < 1000) {
+        alert("Draw something first");
         return;
       }
-      if (event.key === "ArrowRight") {
-        movePage(1);
-      } else if (event.key === "ArrowLeft") {
-        movePage(-1);
-      } else if (event.key === "+" || event.key === "=") {
-        setZoom(state.scale + 0.2);
-      } else if (event.key === "-" || event.key === "_") {
-        setZoom(state.scale - 0.2);
-      } else if (event.key.toLowerCase() === "f") {
-        fitToWidth();
-      } else if (event.key === "Delete" || event.key === "Backspace") {
-        clearPageHighlights();
-      }
-    });
 
-    updateHeaderState();
-    updateDocMeta();
+      try {
+        const res = await fetch("http://localhost:8000/ocr", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ image: imageData })
+        });
+
+        const result = await res.json();
+
+        console.log("SEARCH OCR:", result.text);
+
+        const cleaned = result.text.trim().toLowerCase();
+        searchTextAndJump(cleaned);
+
+      } catch (err) {
+        console.error("Search OCR error:", err);
+      }
+    };
+    
+    // Init
+    setActiveTool("pen");
+    console.log("GesturePDF Pro ready — drop a PDF and enable camera.");
   </script>
+  <!-- 🔍 SEARCH PAD -->
+  <div id="search-pad-container" style="
+  display:none;
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:300px;
+  height:220px;
+  background:#111;
+  border:1px solid #444;
+  border-radius:12px;
+  z-index:9999;
+  padding:10px;
+">
+
+    <canvas id="search-pad" width="280" height="140" style="background:white;border-radius:8px;"></canvas>
+
+    <div style="margin-top:8px;display:flex;gap:6px;">
+      <button id="search-pad-run" style="flex:1;">Search</button>
+      <button id="search-pad-clear" style="flex:1;">Clear</button>
+      <button id="search-pad-close" style="flex:1;">Close</button>
+    </div>
+
+  </div>
 </body>
 
 </html>
