@@ -53,7 +53,7 @@ class LowPassFilter {
  *   derivativeCutoff: cutoff for the speed estimator
  */
 class OneEuroFilter {
-  constructor({ minCutoff = 1.0, beta = 0.008, derivativeCutoff = 1.5 } = {}) {
+  constructor({ minCutoff = 1.2, beta = 0.02, derivativeCutoff = 1.5 } = {}) {
     this.minCutoff = minCutoff;
     this.beta = beta;
     this.derivativeCutoff = derivativeCutoff;

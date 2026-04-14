@@ -54,7 +54,7 @@ export const MAX_UNDO_STEPS     = 20;
 
 // ── Hand tracking settings ──────────────────────────────────────────
 export const LOST_HAND_RESET_FRAMES = 15;  // frames without hand before full reset
-export const GESTURE_STABLE_FRAMES  = 5;   // frames to confirm a gesture change
+export const GESTURE_STABLE_FRAMES  = 3;   // frames to confirm a gesture change
 export const FINGER_THRESHOLD       = 0.05;
 export const FINGER_HISTORY_SIZE    = 3;   // frames for finger-up averaging
 export const GESTURE_HISTORY_SIZE   = 3;   // frames for gesture smoothing

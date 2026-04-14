@@ -15,7 +15,7 @@
 
   <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
     /* ══════════════════════════════════════════════════════════════
@@ -491,7 +491,7 @@
        SIDEBAR
        ══════════════════════════════════════════════════════════════ */
     #sidebar {
-      width: 265px;
+      width: 340px;
       flex-shrink: 0;
       background: var(--surface);
       border-left: 1px solid var(--border);
@@ -537,13 +537,14 @@
       border-radius: var(--radius);
       overflow: hidden;
       background: #000;
-      aspect-ratio: 4/3;
+      aspect-ratio: 16/10;
     }
 
     #webcam {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transform: none;
       display: block;
       opacity: 0;
     }
@@ -768,6 +769,63 @@
       color: var(--danger);
     }
 
+    #search-pad {
+      position: fixed;
+      top: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(860px, 82vw);
+      min-width: 320px;
+      background: rgba(8, 9, 13, 0.92);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      padding: 10px;
+      z-index: 400;
+      backdrop-filter: blur(10px);
+      display: none;
+    }
+
+    #search-pad.visible {
+      display: block;
+    }
+
+    #search-pad-toolbar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    #search-pad-toolbar button {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text2);
+      border-radius: 6px;
+      font-size: 0.68rem;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    #search-pad-toolbar button:hover {
+      background: var(--surface3);
+    }
+
+    #search-status {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    #search-pad-canvas {
+      width: 100%;
+      height: 170px;
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #dbe2ea;
+      display: block;
+    }
+
     /* Tips */
     .tips-text {
       font-size: 0.72rem;
@@ -832,9 +890,13 @@
     <span id="zoom-info">150%</span>
     <button class="tb-btn" id="btn-zoom-in">+ Zoom</button>
     <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-new-pdf">📂 New PDF</button>
+    <div class="tb-sep"></div>
     <button class="tb-tool-btn active" id="btn-tool-pen" data-tool="pen">✍️ Pen</button>
     <button class="tb-tool-btn" id="btn-tool-hl" data-tool="highlighter">🟡 Highlight</button>
-    <button class="tb-btn" id="btn-search-pad">🔍 Search</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-toggle-search">🔎 Search Pad</button>
+    <button class="tb-btn" id="btn-export-pdf">⬇ Annotated PDF</button>
     <div class="tb-sep"></div>
     <button class="tb-btn danger-btn" id="btn-clear" style="color: var(--danger);">🗑 Clear Page</button>
   </div>
@@ -899,23 +961,19 @@
         <div class="s-title">🖐️ Gesture Guide</div>
         <div class="g-item">
           <div class="g-icon">☝️</div>
-          <div><span class="g-label">Index finger</span><br><span class="g-desc">Pointer cursor
-              (always)</span></div>
+          <div><span class="g-label">Index finger</span><br><span class="g-desc">Pointer cursor (always)</span></div>
         </div>
         <div class="g-item">
           <div class="g-icon">✌️</div>
-          <div><span class="g-label">Two fingers</span><br><span class="g-desc">Draw with pen /
-              highlighter</span></div>
+          <div><span class="g-label">Two fingers</span><br><span class="g-desc">Draw with pen / highlighter</span></div>
         </div>
         <div class="g-item">
           <div class="g-icon">✊</div>
-          <div><span class="g-label">Fist</span><br><span class="g-desc">Smooth scroll PDF up/down</span>
-          </div>
+          <div><span class="g-label">Fist</span><br><span class="g-desc">Smooth scroll PDF up/down</span></div>
         </div>
         <div class="g-item">
           <div class="g-icon">✋</div>
-          <div><span class="g-label">Open hand swipe</span><br><span class="g-desc">Next / prev page</span>
-          </div>
+          <div><span class="g-label">Open hand swipe</span><br><span class="g-desc">Next / prev page</span></div>
         </div>
         <div class="g-item">
           <div class="g-icon">🤏</div>
@@ -923,8 +981,8 @@
         </div>
         <div class="g-item">
           <div class="g-icon">🎯</div>
-          <div><span class="g-label">Hover over toolbar</span><br><span class="g-desc">Point at button to
-              select tool</span></div>
+          <div><span class="g-label">Hover over toolbar</span><br><span class="g-desc">Point at button to select
+              tool</span></div>
         </div>
       </div>
 
@@ -957,10 +1015,22 @@
   <!-- Cursor overlay -->
   <canvas id="cursor-canvas"></canvas>
 
+  <div id="search-pad">
+    <div id="search-pad-toolbar">
+      <button id="btn-search-clear">Clear</button>
+      <button id="btn-search-ocr">OCR Search</button>
+      <button id="btn-search-prev">Prev</button>
+      <button id="btn-search-next">Next</button>
+      <button id="btn-search-close">Close</button>
+      <span id="search-status">No search yet</span>
+    </div>
+    <canvas id="search-pad-canvas" width="1200" height="300"></canvas>
+  </div>
+
   <!-- ═══════════════════════════════════════════════════════════════
        JAVASCRIPT
        ═══════════════════════════════════════════════════════════════ -->
-  <script type="module" defer>
+  <script type="module">
     import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3";
 
     // ─── PDF.js Setup ──────────────────────────────────────────────
@@ -988,10 +1058,13 @@
     const pillDot = gesturePill.querySelector(".dot");
     const notesList = document.getElementById("notes-list");
     const virtualBtns = document.querySelectorAll(".v-btn");
+    const searchPadEl = document.getElementById("search-pad");
+    const searchPadCanvas = document.getElementById("search-pad-canvas");
+    const searchPadCtx = searchPadCanvas.getContext("2d");
+    const searchStatusEl = document.getElementById("search-status");
 
     // ─── App State ─────────────────────────────────────────────────
     let pdfDoc = null;
-    let pdfTextIndex = {};
     let totalPages = 0;
     let scale = 1.5;
     const MIN_SCALE = 0.5, MAX_SCALE = 4.0;
@@ -1053,6 +1126,16 @@
     let scrollVelocity = 0;
     let scrollInertiaActive = false;
     let scrollInertiaRAF = null;
+    let pageTextIndex = [];
+    let searchMatches = [];
+    let searchMatchIdx = 0;
+    let searchPadVisible = false;
+    let searchPadStroke = null;
+    const MIRROR_INPUT = true;
+    const SINGLE_PAGE_MODE = true;
+    let viewerFrame = 0;
+    let rerenderInProgress = false;
+    let rerenderQueued = false;
 
     // ═══════════════════════════════════════════════════════════════
     // ONE EURO FILTER — Adaptive low-pass filter for anti-jitter
@@ -1122,6 +1205,10 @@
     // Drawing filters (used by two-finger pen/highlighter)
     const drawFilterX = new OneEuroFilter(60, 1.0, 0.005, 1.0);
     const drawFilterY = new OneEuroFilter(60, 1.0, 0.005, 1.0);
+    const hlFilterX = new OneEuroFilter(60, 0.45, 0.001, 1.0);
+    const hlFilterY = new OneEuroFilter(60, 0.45, 0.001, 1.0);
+    const spFilterX = new OneEuroFilter(60, 1.2, 0.02, 1.5);
+    const spFilterY = new OneEuroFilter(60, 1.2, 0.02, 1.5);
     // Scroll filter
     const scrollFilter = new OneEuroFilter(60, 0.8, 0.01, 1.0);
 
@@ -1155,13 +1242,8 @@
       const pinchDist = dist(thumbTip, idxTip);
       const palmSize = dist(wrist, idxMCP);
 
-      // Gesture set: pinch > open > fist > peace > point > none
+      // Gesture set: open > fist > pinch > peace > point > none
       // "point" = ALWAYS pointer cursor. "peace" = draw with active tool.
-
-      // Pinch: thumb and index close, others down
-      if (pinchDist < palmSize * 0.35 && !midUp && !ringUp && !pinkUp) {
-        return "pinch";
-      }
 
       // Open hand: all 4 fingers up
       if (idxUp && midUp && ringUp && pinkUp) {
@@ -1173,14 +1255,19 @@
         return "fist";
       }
 
+      // Pinch: index must stay up and other fingers down
+      if (idxUp && pinchDist < palmSize * 0.28 && !midUp && !ringUp && !pinkUp) {
+        return "pinch";
+      }
+
       // Peace: index + middle up, ring + pinky down → DRAW
       if (idxUp && midUp && !ringUp && !pinkUp) {
         return "peace";
       }
 
-      // Three fingers (index+mid+ring): treat as peace for drawing
+      // Three fingers (index+mid+ring): page swipe mode
       if (idxUp && midUp && ringUp && !pinkUp) {
-        return "peace";
+        return "page_swipe";
       }
 
       // Point: ONLY index up → always pointer cursor
@@ -1249,6 +1336,10 @@
         prevWristX = null;
         openStableFrames = 0;
       }
+      if (g === "page_swipe") {
+        prevWristX = null;
+        openStableFrames = 0;
+      }
       if (g === "fist") {
         prevWristY = null;
         scrollVelocity = 0;
@@ -1266,6 +1357,8 @@
         // Drawing mode — reset drawing filters for fresh start
         drawFilterX.reset();
         drawFilterY.reset();
+        hlFilterX.reset();
+        hlFilterY.reset();
       }
     }
 
@@ -1273,11 +1366,18 @@
       if (g === "peace" && currentStroke) {
         finishPenStroke();
       }
+      if (g === "peace") {
+        searchPadStroke = null;
+      }
       if (g === "pinch") {
         pinchStartDist = null;
         lastZoomAction = null;
       }
       if (g === "open") {
+        prevWristX = null;
+        openStableFrames = 0;
+      }
+      if (g === "page_swipe") {
         prevWristX = null;
         openStableFrames = 0;
       }
@@ -1301,9 +1401,6 @@
 
       for (let i = 1; i <= totalPages; i++) {
         const page = await pdfDoc.getPage(i);
-        const textContent = await page.getTextContent();
-        const strings = textContent.items.map(item => item.str).join(" ");
-        pdfTextIndex[i] = strings.toLowerCase();
         const viewport = page.getViewport({ scale });
 
         // Create wrapper
@@ -1355,21 +1452,7 @@
       }
 
       updatePageInfo();
-      setupIntersectionObserver();
-    }
-
-    function searchTextAndJump(query) {
-      query = query.toLowerCase();
-
-      for (let page in pdfTextIndex) {
-        if (pdfTextIndex[page].includes(query)) {
-          scrollToPage(parseInt(page));
-          showPill(`🔍 Found on page ${page}`, "#4ade80");
-          return;
-        }
-      }
-
-      showPill("❌ Not found", "#f43f5e");
+      updateSinglePageVisibility();
     }
 
     async function rerenderAtScale() {
@@ -1396,6 +1479,23 @@
       }
 
       zoomInfo.textContent = `${Math.round(scale * 100)}%`;
+    }
+
+    async function requestRerender() {
+      if (rerenderInProgress) {
+        rerenderQueued = true;
+        return;
+      }
+      rerenderInProgress = true;
+      try {
+        await rerenderAtScale();
+      } finally {
+        rerenderInProgress = false;
+        if (rerenderQueued) {
+          rerenderQueued = false;
+          requestRerender();
+        }
+      }
     }
 
     function setupIntersectionObserver() {
@@ -1425,9 +1525,23 @@
       zoomInfo.textContent = `${Math.round(scale * 100)}%`;
     }
 
+    function updateSinglePageVisibility() {
+      if (!SINGLE_PAGE_MODE) return;
+      pageElements.forEach((el) => {
+        el.wrapper.style.display = el.pageNum === currentPage ? "block" : "none";
+      });
+      pdfArea.scrollTop = 0;
+    }
+
     function scrollToPage(pageNum) {
       const el = pageElements[pageNum - 1];
       if (!el) return;
+      currentPage = pageNum;
+      if (SINGLE_PAGE_MODE) {
+        updateSinglePageVisibility();
+        updatePageInfo();
+        return;
+      }
       el.wrapper.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
@@ -1436,7 +1550,7 @@
     // ═══════════════════════════════════════════════════════════════
     function getPageUnderCursor(tip) {
       // Convert normalized tip to screen coordinates
-      const sx = (tip.x) * window.innerWidth;
+      const sx = mapX(tip.x) * window.innerWidth;
       const sy = tip.y * window.innerHeight;
 
       for (const el of pageElements) {
@@ -1451,7 +1565,7 @@
 
     function screenToPage(tip, pageEl) {
       const rect = pageEl.wrapper.getBoundingClientRect();
-      const sx = (tip.x) * window.innerWidth;
+      const sx = mapX(tip.x) * window.innerWidth;
       const sy = tip.y * window.innerHeight;
       return {
         x: (sx - rect.left) / rect.width,
@@ -1489,7 +1603,7 @@
         ctx.beginPath();
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
-        ctx.lineWidth = 18; // thick highlighter
+        ctx.lineWidth = 14; // thick but more controlled highlighter
         ctx.strokeStyle = h.color;
         ctx.globalAlpha = 0.35;
 
@@ -1526,41 +1640,7 @@
       if (currentStroke && currentStroke.points.length >= 2) {
         refreshNotesPanel();
       }
-      if (currentStroke && currentStroke.points.length > 20) {
-        captureCanvasAndSearch();
-      }
       currentStroke = null;
-    }
-
-    async function processHandwritingAndSearch(imageData) {
-      try {
-        const res = await fetch("http://localhost:8000/ocr", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ image: imageData })
-        });
-
-        const result = await res.json();
-
-        console.log("OCR TEXT:", result.text);
-
-        const cleaned = result.text.trim().toLowerCase();
-        searchTextAndJump(cleaned);
-
-      } catch (err) {
-        console.error("OCR Error:", err);
-        showPill("OCR failed", "#f43f5e");
-      }
-    }
-
-    function captureCanvasAndSearch() {
-      const canvas = pageElements[currentPage - 1].inkCanvas;
-      const data = canvas.toDataURL();
-
-      //integrating model here
-      processHandwritingAndSearch(data);
     }
 
     function redrawPenStrokes(pageNum) {
@@ -1675,12 +1755,70 @@
     // GESTURE HANDLERS
     // ═══════════════════════════════════════════════════════════════
     const now = () => performance.now() / 1000; // seconds
+    const mapX = (x) => MIRROR_INPUT ? (1 - x) : x;
+
+    function clearSearchPad() {
+      searchPadCtx.fillStyle = "#ffffff";
+      searchPadCtx.fillRect(0, 0, searchPadCanvas.width, searchPadCanvas.height);
+      searchPadStroke = null;
+      spFilterX.reset();
+      spFilterY.reset();
+    }
+
+    function updateSearchStatus(text) {
+      searchStatusEl.textContent = text;
+    }
+
+    function isPointOnSearchPad(screenX, screenY) {
+      if (!searchPadVisible) return false;
+      const rect = searchPadCanvas.getBoundingClientRect();
+      return screenX >= rect.left && screenX <= rect.right && screenY >= rect.top && screenY <= rect.bottom;
+    }
+
+    function addSearchPadPoint(screenX, screenY) {
+      const t = now();
+      const rect = searchPadCanvas.getBoundingClientRect();
+      const rawX = ((screenX - rect.left) / rect.width) * searchPadCanvas.width;
+      const rawY = ((screenY - rect.top) / rect.height) * searchPadCanvas.height;
+      const x = spFilterX.filter(rawX, t);
+      const y = spFilterY.filter(rawY, t);
+      if (!searchPadStroke) {
+        searchPadStroke = [{ x, y }];
+      } else {
+        searchPadStroke.push({ x, y });
+      }
+      if (searchPadStroke.length < 2) return;
+      const a = searchPadStroke[searchPadStroke.length - 2];
+      const b = searchPadStroke[searchPadStroke.length - 1];
+      const segDist = Math.hypot(b.x - a.x, b.y - a.y);
+      if (segDist < 1.2) return;
+      searchPadCtx.strokeStyle = "#111111";
+      searchPadCtx.lineWidth = 9;
+      searchPadCtx.lineCap = "round";
+      searchPadCtx.lineJoin = "round";
+      searchPadCtx.beginPath();
+      searchPadCtx.moveTo(a.x, a.y);
+      searchPadCtx.lineTo(b.x, b.y);
+      searchPadCtx.stroke();
+    }
+
+    function drawOnSearchPadIfVisible(screenX, screenY) {
+      if (!searchPadVisible) return false;
+      if (!isPointOnSearchPad(screenX, screenY)) {
+        searchPadStroke = null;
+        return false;
+      }
+      addSearchPadPoint(screenX, screenY);
+      drawPenCursor(screenX, screenY, "#111111");
+      showPill("🔎 Writing search query", "#22d3ee");
+      return true;
+    }
 
     function handlePoint(lm) {
       // INDEX FINGER = ALWAYS POINTER CURSOR
       const tip = lm[8];
       const t = now();
-      let sx = (tip.x) * cursorCanvas.width;
+      let sx = mapX(tip.x) * cursorCanvas.width;
       let sy = tip.y * cursorCanvas.height;
 
       // Apply pointer-specific One Euro Filter
@@ -1688,6 +1826,10 @@
       sy = ptrFilterY.filter(sy, t);
 
       cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+
+      if (drawOnSearchPadIfVisible(sx, sy)) {
+        return;
+      }
 
       // Check virtual toolbar hover (tool selection via dwell)
       const isHoveringToolbar = checkVirtualToolbarHover(sx, sy);
@@ -1706,14 +1848,22 @@
       // TWO FINGERS = DRAW WITH ACTIVE TOOL (pen or highlighter)
       const tip = lm[8];
       const t = now();
+      const sx = mapX(tip.x) * cursorCanvas.width;
+      const sy = tip.y * cursorCanvas.height;
+
+      if (drawOnSearchPadIfVisible(sx, sy)) {
+        return;
+      }
 
       const pageEl = getPageUnderCursor(tip);
       if (!pageEl) return;
 
       const coords = screenToPage(tip, pageEl);
       // Use drawing-specific filters (separate from pointer)
-      const filteredX = drawFilterX.filter(coords.x, t);
-      const filteredY = drawFilterY.filter(coords.y, t);
+      const fx = activeTool === "highlighter" ? hlFilterX : drawFilterX;
+      const fy = activeTool === "highlighter" ? hlFilterY : drawFilterY;
+      const filteredX = fx.filter(coords.x, t);
+      const filteredY = fy.filter(coords.y, t);
 
       // Calculate screen position for cursor display
       const rect = pageEl.wrapper.getBoundingClientRect();
@@ -1790,6 +1940,35 @@
     function handleFist(lm) {
       const wy = lm[0].y;
       const t = now();
+      const wx = mapX(lm[0].x);
+
+      if (SINGLE_PAGE_MODE) {
+        if (pageCooldown > 0) {
+          pageCooldown--;
+          prevWristX = wx;
+          return;
+        }
+        if (prevWristX !== null) {
+          const dx = wx - prevWristX;
+          if (dx > 0.07 && currentPage < totalPages) {
+            scrollToPage(currentPage + 1);
+            pageCooldown = 18;
+            prevWristX = null;
+            showPill("➡️ Next Page", "#f472b6");
+            return;
+          }
+          if (dx < -0.07 && currentPage > 1) {
+            scrollToPage(currentPage - 1);
+            pageCooldown = 18;
+            prevWristX = null;
+            showPill("⬅️ Previous Page", "#60a5fa");
+            return;
+          }
+        }
+        prevWristX = wx;
+        showPill("✊ Move left/right for pages", "#fbbf24");
+        return;
+      }
 
       if (prevWristY !== null) {
         const rawDy = wy - prevWristY;
@@ -1819,6 +1998,10 @@
     }
 
     function handleOpen(lm) {
+      if (SINGLE_PAGE_MODE) {
+        showPill("✋ Open hand idle", "#60a5fa");
+        return;
+      }
       openStableFrames++;
 
       if (pageCooldown > 0) {
@@ -1828,36 +2011,75 @@
 
       // Two-phase: must be stable for 12 frames before swipe detection
       if (openStableFrames < 12) {
-        prevWristX = lm[0].x; // set baseline
+        prevWristX = mapX(lm[0].x); // set baseline
         showPill("✋ Ready to swipe...", "#60a5fa");
         return;
       }
 
-      const wx = lm[0].x;
+      const wx = mapX(lm[0].x);
       if (prevWristX !== null) {
         const dx = wx - prevWristX;
 
         // Larger threshold to prevent false triggers
-        if (dx > 0.10 && currentPage > 1) {
-          // Swipe right → prev page
-          scrollToPage(currentPage - 1);
-          pageCooldown = 40;
-          prevWristX = null;
-          openStableFrames = 0;
-          showPill("⬅️ Previous Page", "#60a5fa");
-          return;
-        } else if (dx < -0.10 && currentPage < totalPages) {
-          // Swipe left → next page
+        if (dx > 0.10 && currentPage < totalPages) {
+          // Swipe right → next page
           scrollToPage(currentPage + 1);
           pageCooldown = 40;
           prevWristX = null;
           openStableFrames = 0;
           showPill("➡️ Next Page", "#f472b6");
           return;
+        } else if (dx < -0.10 && currentPage > 1) {
+          // Swipe left → previous page
+          scrollToPage(currentPage - 1);
+          pageCooldown = 40;
+          prevWristX = null;
+          openStableFrames = 0;
+          showPill("⬅️ Previous Page", "#60a5fa");
+          return;
         }
       }
       prevWristX = wx;
       showPill("✋ Swipe to navigate", "#60a5fa");
+    }
+
+    function handlePageSwipe(lm) {
+      if (SINGLE_PAGE_MODE) {
+        showPill("🫱 Use fist for page switch", "#93c5fd");
+        return;
+      }
+      openStableFrames++;
+      if (pageCooldown > 0) {
+        pageCooldown--;
+        return;
+      }
+      if (openStableFrames < 8) {
+        prevWristX = mapX(lm[0].x);
+        showPill("🫱 Page swipe ready", "#93c5fd");
+        return;
+      }
+      const wx = mapX(lm[0].x);
+      if (prevWristX !== null) {
+        const dx = wx - prevWristX;
+        if (dx > 0.08 && currentPage < totalPages) {
+          scrollToPage(currentPage + 1);
+          pageCooldown = 24;
+          prevWristX = null;
+          openStableFrames = 0;
+          showPill("➡️ Next Page", "#f472b6");
+          return;
+        }
+        if (dx < -0.08 && currentPage > 1) {
+          scrollToPage(currentPage - 1);
+          pageCooldown = 24;
+          prevWristX = null;
+          openStableFrames = 0;
+          showPill("⬅️ Previous Page", "#60a5fa");
+          return;
+        }
+      }
+      prevWristX = wx;
+      showPill("🫱 Swipe for pages", "#93c5fd");
     }
 
     function handlePinch(lm) {
@@ -1867,13 +2089,13 @@
 
       if (ratio > 1.35 && lastZoomAction !== "in") {
         scale = Math.min(MAX_SCALE, scale + 0.2);
-        rerenderAtScale();
+        requestRerender();
         pinchStartDist = curr;
         lastZoomAction = "in";
         showPill("🔍 Zoom In", "#4ade80");
       } else if (ratio < 0.65 && lastZoomAction !== "out") {
         scale = Math.max(MIN_SCALE, scale - 0.2);
-        rerenderAtScale();
+        requestRerender();
         pinchStartDist = curr;
         lastZoomAction = "out";
         showPill("🔍 Zoom Out", "#f43f5e");
@@ -1903,8 +2125,8 @@
       HAND_CONNECTIONS.forEach(([a, b]) => {
         handCtx.strokeStyle = "rgba(74, 222, 128, 0.6)";
         handCtx.beginPath();
-        handCtx.moveTo((1 - lm[a].x) * w, lm[a].y * h);
-        handCtx.lineTo((1 - lm[b].x) * w, lm[b].y * h);
+        handCtx.moveTo(mapX(lm[a].x) * w, lm[a].y * h);
+        handCtx.lineTo(mapX(lm[b].x) * w, lm[b].y * h);
         handCtx.stroke();
       });
 
@@ -1912,7 +2134,7 @@
       lm.forEach((pt, i) => {
         handCtx.beginPath();
         const r = i === 8 ? 5 : (i === 4 ? 4 : 2.5);
-        handCtx.arc((pt.x) * w, pt.y * h, r, 0, Math.PI * 2);
+        handCtx.arc(mapX(pt.x) * w, pt.y * h, r, 0, Math.PI * 2);
         handCtx.fillStyle = i === 8 ? "#fbbf24" : (i === 4 ? "#22d3ee" : "#60a5fa");
         handCtx.fill();
       });
@@ -2047,37 +2269,89 @@
       URL.revokeObjectURL(url);
     }
 
-    async function exportAnnotatedPDF() {
-      const existingPdfBytes = await fetch(currentPDFUrl).then(res => res.arrayBuffer());
-      const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
-
+    async function exportAnnotatedPdf() {
+      if (!pdfDoc || !window.jspdf?.jsPDF) return;
+      const { jsPDF } = window.jspdf;
+      const pdfOut = new jsPDF({ unit: "pt", compress: true });
       for (let i = 0; i < pageElements.length; i++) {
-        const page = pdfDoc.getPage(i);
-        const { width, height } = page.getSize();
-
-        (penStrokes[i + 1] || []).forEach(s => {
-          for (let j = 1; j < s.points.length; j++) {
-            const p1 = s.points[j - 1];
-            const p2 = s.points[j];
-
-            page.drawLine({
-              start: { x: p1.x * width, y: height - p1.y * height },
-              end: { x: p2.x * width, y: height - p2.y * height },
-              thickness: 2,
-              color: PDFLib.rgb(0, 0, 0),
-            });
-          }
-        });
+        const pageEl = pageElements[i];
+        const w = pageEl.pdfCanvas.width;
+        const h = pageEl.pdfCanvas.height;
+        const off = document.createElement("canvas");
+        off.width = w;
+        off.height = h;
+        const ctx = off.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(pageEl.pdfCanvas, 0, 0);
+        ctx.drawImage(pageEl.hlCanvas, 0, 0);
+        ctx.drawImage(pageEl.inkCanvas, 0, 0);
+        if (i > 0) pdfOut.addPage([w, h], w >= h ? "landscape" : "portrait");
+        else pdfOut.setPage(1);
+        const img = off.toDataURL("image/jpeg", 0.9);
+        pdfOut.addImage(img, "JPEG", 0, 0, w, h);
       }
+      pdfOut.save("annotated.pdf");
+    }
 
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
+    async function buildPdfTextIndex() {
+      if (!pdfDoc) return;
+      pageTextIndex = [];
+      for (let i = 1; i <= totalPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const text = await page.getTextContent();
+        pageTextIndex.push(text.items.map(item => item.str).join(" ").toLowerCase());
+      }
+    }
 
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "annotated.pdf";
-      a.click();
+    function runPdfSearch(query) {
+      const q = (query || "").trim().toLowerCase();
+      if (!q) {
+        searchMatches = [];
+        searchMatchIdx = 0;
+        updateSearchStatus("Empty query");
+        return;
+      }
+      searchMatches = [];
+      pageTextIndex.forEach((txt, idx) => {
+        if (txt.includes(q)) searchMatches.push(idx + 1);
+      });
+      searchMatchIdx = 0;
+      if (!searchMatches.length) {
+        updateSearchStatus(`No matches for "${query}"`);
+        return;
+      }
+      scrollToPage(searchMatches[0]);
+      updateSearchStatus(`${searchMatches.length} pages match "${query}"`);
+    }
+
+    function gotoSearchMatch(delta) {
+      if (!searchMatches.length) return;
+      searchMatchIdx = (searchMatchIdx + delta + searchMatches.length) % searchMatches.length;
+      const page = searchMatches[searchMatchIdx];
+      scrollToPage(page);
+      updateSearchStatus(`Match ${searchMatchIdx + 1}/${searchMatches.length} on page ${page}`);
+    }
+
+    async function recognizeSearchPad() {
+      const b64 = searchPadCanvas.toDataURL("image/png");
+      updateSearchStatus("Recognizing...");
+      try {
+        const resp = await fetch("/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: b64 })
+        });
+        const data = await resp.json();
+        const text = (data.text || "").trim();
+        if (!text) {
+          updateSearchStatus("OCR empty");
+          return;
+        }
+        runPdfSearch(text);
+      } catch {
+        updateSearchStatus("OCR failed");
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2091,9 +2365,12 @@
     window.addEventListener("resize", resizeCursorCanvas);
 
     async function detectLoop() {
-      let lastDetectionTime = 0;
-      const DETECTION_INTERVAL = 40; // milliseconds
       if (!webcamRunning || !handLandmarker) {
+        requestAnimationFrame(detectLoop);
+        return;
+      }
+      viewerFrame++;
+      if (viewerFrame % 2 !== 0) {
         requestAnimationFrame(detectLoop);
         return;
       }
@@ -2107,16 +2384,7 @@
       handCanvasEl.width = webcamVideo.videoWidth;
       handCanvasEl.height = webcamVideo.videoHeight;
 
-      const nowTime = performance.now();
-
-      if (nowTime - lastDetectTime < DETECT_INTERVAL) {
-        requestAnimationFrame(detectLoop);
-        return;
-      }
-
-      lastDetectTime = nowTime;
-
-      const results = handLandmarker.detectForVideo(webcamVideo, nowTime);
+      const results = handLandmarker.detectForVideo(webcamVideo, performance.now());
 
       if (results.landmarks && results.landmarks.length > 0) {
         const lm = results.landmarks[0];
@@ -2132,6 +2400,7 @@
           case "peace": handlePeace(lm); break;
           case "fist": handleFist(lm); break;
           case "open": handleOpen(lm); break;
+          case "page_swipe": handlePageSwipe(lm); break;
           case "pinch": handlePinch(lm); break;
           default:
             cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
@@ -2210,9 +2479,7 @@
     // ═══════════════════════════════════════════════════════════════
     // LOAD PDF
     // ═══════════════════════════════════════════════════════════════
-    let currentPDFUrl = null;
     async function loadPDF(src) {
-      currentPDFUrl = src;
       try {
         pdfDoc = await pdfjsLib.getDocument(src).promise;
         totalPages = pdfDoc.numPages;
@@ -2226,6 +2493,9 @@
         toolbar.style.display = "flex";
 
         await renderAllPages();
+        await buildPdfTextIndex();
+        clearSearchPad();
+        updateSearchStatus("No search yet");
         refreshNotesPanel();
       } catch (err) {
         console.error("PDF load error:", err);
@@ -2267,11 +2537,11 @@
     // Toolbar: zoom
     document.getElementById("btn-zoom-in").addEventListener("click", () => {
       scale = Math.min(MAX_SCALE, scale + 0.2);
-      if (pdfDoc) rerenderAtScale();
+      if (pdfDoc) requestRerender();
     });
     document.getElementById("btn-zoom-out").addEventListener("click", () => {
       scale = Math.max(MIN_SCALE, scale - 0.2);
-      if (pdfDoc) rerenderAtScale();
+      if (pdfDoc) requestRerender();
     });
 
     // Toolbar: tool buttons
@@ -2294,13 +2564,6 @@
         b.classList.toggle("active", b.dataset.tool === tool);
       });
     }
-
-    window.GesturePDFViewer = {
-      open: loadPDF,
-      destroy: () => {
-        webcamRunning = false;
-      }
-    };
 
     // Toolbar: clear page
     document.getElementById("btn-clear").addEventListener("click", () => {
@@ -2325,10 +2588,33 @@
 
     // Notes panel actions
     document.getElementById("btn-export-notes").addEventListener("click", exportAnnotations);
+    document.getElementById("btn-export-pdf").addEventListener("click", exportAnnotatedPdf);
+    document.getElementById("btn-new-pdf").addEventListener("click", () => {
+      document.getElementById("file-input").click();
+    });
     document.getElementById("btn-clear-all-notes").addEventListener("click", () => {
       if (confirm("Clear all annotations from all pages?")) {
         clearAllAnnotations();
       }
+    });
+    document.getElementById("btn-toggle-search").addEventListener("click", () => {
+      searchPadVisible = !searchPadVisible;
+      searchPadEl.classList.toggle("visible", searchPadVisible);
+      if (searchPadVisible) {
+        clearSearchPad();
+        updateSearchStatus("Write with index or two-finger gesture");
+      }
+    });
+    document.getElementById("btn-search-clear").addEventListener("click", () => {
+      clearSearchPad();
+      updateSearchStatus("Search pad cleared");
+    });
+    document.getElementById("btn-search-ocr").addEventListener("click", recognizeSearchPad);
+    document.getElementById("btn-search-next").addEventListener("click", () => gotoSearchMatch(1));
+    document.getElementById("btn-search-prev").addEventListener("click", () => gotoSearchMatch(-1));
+    document.getElementById("btn-search-close").addEventListener("click", () => {
+      searchPadVisible = false;
+      searchPadEl.classList.remove("visible");
     });
 
     // Keyboard shortcuts
@@ -2343,16 +2629,21 @@
       } else if (e.key === "+" || e.key === "=") {
         e.preventDefault();
         scale = Math.min(MAX_SCALE, scale + 0.2);
-        rerenderAtScale();
+        requestRerender();
       } else if (e.key === "-") {
         e.preventDefault();
         scale = Math.max(MIN_SCALE, scale - 0.2);
-        rerenderAtScale();
+        requestRerender();
+      } else if (e.key === "/") {
+        e.preventDefault();
+        searchPadVisible = !searchPadVisible;
+        searchPadEl.classList.toggle("visible", searchPadVisible);
       }
     });
 
     // Track scroll for page indicator
     pdfArea.addEventListener("scroll", () => {
+      if (SINGLE_PAGE_MODE) return;
       // Find which page is most visible
       let bestPage = 1;
       let bestOverlap = 0;
@@ -2375,101 +2666,11 @@
       }
     });
 
-    // 🔍 SEARCH PAD LOGIC
-    const searchPadContainer = document.getElementById("search-pad-container");
-    const searchPad = document.getElementById("search-pad");
-    const spCtx = searchPad.getContext("2d");
-
-    let drawing = false;
-
-    // open pad
-    document.getElementById("btn-search-pad").onclick = () => {
-      searchPadContainer.style.display = "block";
-    };
-
-    // close pad
-    document.getElementById("search-pad-close").onclick = () => {
-      searchPadContainer.style.display = "none";
-    };
-
-    // clear pad
-    document.getElementById("search-pad-clear").onclick = () => {
-      spCtx.clearRect(0, 0, searchPad.width, searchPad.height);
-    };
-
-    // drawing
-    searchPad.onmousedown = () => drawing = true;
-    searchPad.onmouseup = () => drawing = false;
-    searchPad.onmousemove = (e) => {
-      if (!drawing) return;
-      const rect = searchPad.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      spCtx.fillStyle = "black";
-      spCtx.beginPath();
-      spCtx.arc(x, y, 3, 0, Math.PI * 2);
-      spCtx.fill();
-    };
-
-    document.getElementById("search-pad-run").onclick = async () => {
-      const imageData = searchPad.toDataURL();
-
-      // 🚨 prevent empty search
-      if (!imageData || imageData.length < 1000) {
-        alert("Draw something first");
-        return;
-      }
-
-      try {
-        const res = await fetch("http://localhost:8000/ocr", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ image: imageData })
-        });
-
-        const result = await res.json();
-
-        console.log("SEARCH OCR:", result.text);
-
-        const cleaned = result.text.trim().toLowerCase();
-        searchTextAndJump(cleaned);
-
-      } catch (err) {
-        console.error("Search OCR error:", err);
-      }
-    };
-    
     // Init
     setActiveTool("pen");
+    clearSearchPad();
     console.log("GesturePDF Pro ready — drop a PDF and enable camera.");
   </script>
-  <!-- 🔍 SEARCH PAD -->
-  <div id="search-pad-container" style="
-  display:none;
-  position:fixed;
-  bottom:20px;
-  right:20px;
-  width:300px;
-  height:220px;
-  background:#111;
-  border:1px solid #444;
-  border-radius:12px;
-  z-index:9999;
-  padding:10px;
-">
-
-    <canvas id="search-pad" width="280" height="140" style="background:white;border-radius:8px;"></canvas>
-
-    <div style="margin-top:8px;display:flex;gap:6px;">
-      <button id="search-pad-run" style="flex:1;">Search</button>
-      <button id="search-pad-clear" style="flex:1;">Clear</button>
-      <button id="search-pad-close" style="flex:1;">Close</button>
-    </div>
-
-  </div>
 </body>
 
 </html>

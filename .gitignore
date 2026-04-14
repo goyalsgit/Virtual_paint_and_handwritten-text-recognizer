@@ -14,3 +14,4 @@ data/manifests/
 artifacts/trocr_airdraw/
 artifacts/trocr_airdraw_test/
 artifacts/trocr_airdraw_test_local/
+artifacts/trocr_large_model/

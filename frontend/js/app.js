@@ -249,6 +249,11 @@ function drawAtPoint(cx, cy, nowSec) {
   if (state.prevX === null) {
     state.prevX = vx;
     state.prevY = vy;
+    dCtx.beginPath();
+    dCtx.arc(vx, vy, state.brushSize / 2, 0, Math.PI * 2);
+    dCtx.fill();
+    state.lastDrawT = nowSec;
+    return;
   }
 
   const dx = vx - state.prevX;
@@ -1096,6 +1101,9 @@ document.getElementById("btn-ocr-all").onclick   = () => triggerOCRAll();
 document.getElementById("btn-save-sample").onclick = () => saveCurrentSample();
 document.getElementById("btn-reset-view").onclick = () => { state.panX = 0; state.panY = 0; applyPan(); };
 document.getElementById("btn-download").onclick   = () => downloadCanvas();
+document.getElementById("open-pdf-viewer").onclick = () => {
+  window.open("/pdfviewer", "_blank", "noopener,noreferrer");
+};
 
 sampleInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); saveCurrentSample(); }
