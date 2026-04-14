@@ -1,157 +1,214 @@
-# Fine-Tuning Steps
+# Fine-Tuning Steps From `custom_dataset`
 
-This guide shows how to fine-tune the word-level OCR model in this repo using your collected air-drawing samples.
+This guide shows the complete pipeline for fine-tuning TrOCR from only your custom dataset folder and the Microsoft handwritten base model.
 
-## What this repo already has
+Use this flow when you want to start from:
+- `custom_dataset/images/`
+- `custom_dataset/labels.csv`
+- `microsoft/trocr-large-handwritten`
 
-- Collected samples manifest: `data/collected/words_manifest.jsonl`
-- Split generator: `training/prepare_manifests.py`
-- TrOCR training script: `training/train_trocr.py`
+## What you need on the GPU server
 
-Use this flow when you want to recognize full words like `hello`, `devansh`, or `open ai`.
-
-## Before you start
-
-1. Activate your virtual environment.
-
-```bash
-source venv/bin/activate
-```
-
-2. Install training dependencies.
-
-```bash
-pip install -r training/requirements.txt
-```
-
-3. Check that your collected manifest exists.
-
-```bash
-ls data/collected/words_manifest.jsonl
-```
+1. Clone or copy the repository.
+2. Copy your `custom_dataset/` folder into the repo root.
+3. Install the Python dependencies from `training/requirements.txt`.
+4. Make sure the server can download Hugging Face models the first time.
 
 ## Recommended dataset size
 
-Do not fine-tune with only a few examples.
+Do not fine-tune with just a handful of images.
 
-- Minimum for a rough experiment: `200-500` labeled word images
+- Rough experiment: `200-500` labeled samples
 - Better starting point: `1000+` samples
-- Keep around `10%` for validation
-- Keep around `5-10%` for test
+- Validation split: about `10%`
+- Test split: about `5%`
 
-Right now this repo appears to have only a very small number of samples collected, so first collect more examples from the app.
+If the dataset is small, the model may overfit quickly.
 
-## Step 1: Collect labeled samples
-
-Use the app and save clean word images with labels.
-
-Each row in `data/collected/words_manifest.jsonl` should look like this:
-
-```json
-{"image": "data/collected/words/train/sample.png", "text": "hello", "split": "train"}
-```
-
-Important:
-
-- The `image` path must exist
-- The `text` value must be the correct word
-- The `split` should be `train`, `val`, or `test`
-
-## Step 2: Build training manifests
-
-If your data already includes `split`, the script will keep those assignments.
-If some rows do not include a split, the script will automatically divide them.
-
-Run:
+## Step 1: Install dependencies on the GPU server
 
 ```bash
-python training/prepare_manifests.py
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r training/requirements.txt
+```
+
+If you are running in a notebook environment on the GPU server, use the notebook cell that installs the same packages.
+
+## Step 2: Download the base model from Hugging Face
+
+Use the notebook cell or this Python code:
+
+```python
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+from pathlib import Path
+
+base_model_dir = Path("artifacts/base_models/microsoft_trocr_large_handwritten")
+base_model_dir.mkdir(parents=True, exist_ok=True)
+
+processor = TrOCRProcessor.from_pretrained("microsoft/trocr-large-handwritten")
+model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-large-handwritten")
+
+processor.save_pretrained(base_model_dir)
+model.save_pretrained(base_model_dir)
+```
+
+This creates a real local checkpoint. A checkpoint is valid only if it contains a weight file such as `model.safetensors` or `pytorch_model.bin`.
+
+## Step 3: Convert `custom_dataset/labels.csv` into manifests
+
+Your CSV should look like this:
+
+```csv
+image,text
+20260402T070012849907.png,devansh
+20260403T121705489250.png,Devansh Goyal
+```
+
+Then convert it into JSONL manifests for training.
+
+Use the notebook cell or this standalone code:
+
+```python
+from pathlib import Path
+import csv
+import json
+import random
+
+root = Path.cwd()
+labels_csv = root / "custom_dataset" / "labels.csv"
+images_dir = root / "custom_dataset" / "images"
+manifests_dir = root / "data" / "manifests"
+
+rows = []
+with labels_csv.open("r", encoding="utf-8", newline="") as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+        image_name = (row.get("image") or "").strip()
+        text = (row.get("text") or "").strip()
+        if not image_name or not text:
+            continue
+        image_path = images_dir / image_name
+        if image_path.exists():
+            rows.append({"image": str(image_path), "text": text})
+
+random.Random(42).shuffle(rows)
+count = len(rows)
+count_test = max(1, int(count * 0.05)) if count >= 20 else 0
+count_val = max(1, int(count * 0.10))
+if count_val + count_test >= count:
+    count_val = 1
+    count_test = 0
+count_train = count - count_val - count_test
+
+train_rows = rows[:count_train]
+val_rows = rows[count_train:count_train + count_val]
+test_rows = rows[count_train + count_val:]
+
+manifests_dir.mkdir(parents=True, exist_ok=True)
+for filename, subset in [("train.jsonl", train_rows), ("val.jsonl", val_rows), ("test.jsonl", test_rows)]:
+    with (manifests_dir / filename).open("w", encoding="utf-8") as f:
+        for item in subset:
+            f.write(json.dumps(item, ensure_ascii=True) + "\n")
 ```
 
 This creates:
-
 - `data/manifests/train.jsonl`
 - `data/manifests/val.jsonl`
 - `data/manifests/test.jsonl`
 
-## Step 3: Inspect the generated files
+## Step 4: Fine-tune TrOCR on the GPU
 
-Check the first few rows:
+The standard training script in this repo is `training/train_trocr.py`.
 
-```bash
-sed -n '1,5p' data/manifests/train.jsonl
-sed -n '1,5p' data/manifests/val.jsonl
-sed -n '1,5p' data/manifests/test.jsonl
-```
-
-Each row should look like:
-
-```json
-{"image": "data/collected/words/train/sample.png", "text": "hello"}
-```
-
-## Step 4: Start fine-tuning TrOCR
-
-Run the training command:
+Run it like this:
 
 ```bash
 python training/train_trocr.py \
   --train-manifest data/manifests/train.jsonl \
   --val-manifest data/manifests/val.jsonl \
-  --output-dir artifacts/trocr_airdraw \
-  --epochs 5
+  --test-manifest data/manifests/test.jsonl \
+  --model-name artifacts/base_models/microsoft_trocr_large_handwritten \
+  --output-dir artifacts/trocr_finetuned \
+  --epochs 5 \
+  --train-batch-size 4 \
+  --eval-batch-size 4 \
+  --gradient-accumulation-steps 2 \
+  --learning-rate 5e-5 \
+  --warmup-ratio 0.1 \
+  --max-target-length 64 \
+  --dataloader-num-workers 2 \
+  --save-total-limit 2 \
+  --fp16
 ```
 
-## Step 5: Find the trained model
+If your GPU is smaller, reduce `--train-batch-size` to `2` or `1` and increase `--gradient-accumulation-steps`.
 
-After training finishes, the best checkpoint will be saved here:
+## Step 5: Check that the checkpoint has weights
 
-- `artifacts/trocr_airdraw/best`
+After training, look in:
 
-That folder contains the model and processor files used for inference.
-This repo's backend will automatically use that checkpoint when it exists.
+```text
+artifacts/trocr_finetuned/best
+```
 
-## Step 6: What metrics to watch
+That folder should contain a weight file such as:
+- `model.safetensors`
+- `pytorch_model.bin`
 
-This training script reports:
+If it only has config/tokenizer files, the checkpoint is incomplete.
 
+## Step 6: Make it usable locally in this repo
+
+Copy the best checkpoint files into the deploy folder used by the backend:
+
+```bash
+cp artifacts/trocr_finetuned/best/* artifacts/trocr_finetuned/
+```
+
+Or set the environment variable to point directly at the trained checkpoint:
+
+```bash
+export AIRDRAW_OCR_MODEL=/full/path/to/artifacts/trocr_finetuned/best
+```
+
+The backend in `backend/ocr.py` checks `AIRDRAW_OCR_MODEL` first, then the local artifacts folders.
+
+## Step 7: Run the app locally
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then open:
+
+```text
+http://localhost:8000
+```
+
+## What to monitor while training
+
+The training script reports:
 - `CER` = character error rate
 - `WER` = word error rate
 
 Lower is better for both.
 
-As a rough rule:
+## Standard fine-tuning advice
 
-- High `WER` means the predicted words are still often wrong
-- Falling `CER` means the model is learning spelling and stroke patterns better
-
-## Step 7: Improve the model
-
-If results are weak, improve data quality before changing the model.
-
-- Add more real app samples
-- Keep labels perfectly correct
-- Include different writing speeds and stroke sizes
-- Include common words users will actually draw
-- Keep images tightly cropped and clean
-- Avoid mixing too many single-letter samples into a word model
-
-## Useful rerun command
-
-After collecting more data, rerun the same two commands:
-
-```bash
-python training/prepare_manifests.py
-python training/train_trocr.py \
-  --train-manifest data/manifests/train.jsonl \
-  --val-manifest data/manifests/val.jsonl \
-  --output-dir artifacts/trocr_airdraw \
-  --epochs 5
-```
+- Start from `microsoft/trocr-large-handwritten`.
+- Use fp16 on GPU if supported.
+- Keep labels clean and consistent.
+- Use many real samples from your app, not just synthetic ones.
+- Fine-tune with early validation checks, not only final test metrics.
+- Save the best checkpoint, not just the last checkpoint.
 
 ## Quick summary
 
-1. Collect many labeled word images in `data/collected/words_manifest.jsonl`
-2. Run `python training/prepare_manifests.py`
-3. Run `python training/train_trocr.py --train-manifest data/manifests/train.jsonl --val-manifest data/manifests/val.jsonl --output-dir artifacts/trocr_airdraw --epochs 5`
-4. Use the model saved in `artifacts/trocr_airdraw/best`
+1. Put your data in `custom_dataset/images/` and `custom_dataset/labels.csv`.
+2. Download `microsoft/trocr-large-handwritten` locally.
+3. Build `train.jsonl`, `val.jsonl`, and `test.jsonl`.
+4. Run `training/train_trocr.py` on the GPU server.
+5. Verify weights exist in `artifacts/trocr_finetuned/best`.
+6. Copy that checkpoint back here and run `uvicorn main:app --reload`.

@@ -12,8 +12,19 @@ from PIL import Image
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_finetuned"
 FALLBACK_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
-DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
+DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-base-handwritten"
 OCR_DEBUG_DIR = PROJECT_ROOT / "artifacts" / "ocr_debug"
+
+
+def _has_model_files(directory):
+    if not directory.exists():
+        return False
+    model_files = (
+        "model.safetensors",
+        "pytorch_model.bin",
+        "tf_model.h5",
+    )
+    return any((directory / file_name).exists() for file_name in model_files)
 
 
 def _ensure_bgr(img):
@@ -164,27 +175,43 @@ def _prepare_trocr_image(
     min_height=96,
     preprocessed=False,
 ):
-    cropped = crop_to_content(img, pad=pad)
-    if cropped is None:
-        return None
-
-    gray = _to_grayscale(cropped)
-    if not preprocessed:
+    if preprocessed:
+        # Frontend already cropped, scaled, and rendered on white background.
+        # Just convert to RGB PIL image — no further processing needed.
+        working = _ensure_bgr(img)
+        if working is None:
+            return None
+        gray = cv2.cvtColor(working, cv2.COLOR_BGR2GRAY)
+    else:
+        cropped = crop_to_content(img, pad=pad)
+        if cropped is None:
+            return None
+        gray = _to_grayscale(cropped)
         if np.std(gray) > 30:
             gray = cv2.bilateralFilter(gray, 3, 25, 25)
         _, gray = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
 
-    # Use the natural dimensions of the cropped ink, only enforcing a small minimum
+    # Pad to a square so TrOCR's 384×384 resize preserves aspect ratio.
     height, width = gray.shape[:2]
-    target_height = max(height, 64)
-    target_width = max(width, 64)
+    target_size = max(height, width, 64)
 
-    if target_height > height or target_width > width:
-        canvas = np.full((target_height, target_width), 255, dtype=np.uint8)
-        dy = (target_height - height) // 2
-        dx = (target_width - width) // 2
+    if target_size > height or target_size > width:
+        canvas = np.full((target_size, target_size), 255, dtype=np.uint8)
+        dy = (target_size - height) // 2
+        dx = (target_size - width) // 2
         canvas[dy:dy + height, dx:dx + width] = gray
         gray = canvas
+
+    # Thicken thin air-drawn strokes to look more like pen-on-paper.
+    # This helps the base model (trained on paper handwriting) recognize
+    # the thin digital strokes from the air drawing canvas.
+    ink_mask = gray < 200
+    ink_ratio = np.count_nonzero(ink_mask) / max(1, gray.size)
+    if ink_ratio > 0.001:  # only if there's actual ink
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        inverted = cv2.bitwise_not(gray)
+        dilated = cv2.dilate(inverted, kernel, iterations=1)
+        gray = cv2.bitwise_not(dilated)
 
     rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
     return Image.fromarray(rgb)
@@ -238,16 +265,12 @@ class _TrOCREngine:
             # Load processor from local checkpoint
             self.processor = TrOCRProcessor.from_pretrained(self.model_ref)
 
-            # Try loading model from the same ref. If the local dir has config
-            # but no weights, fall back to loading weights from HuggingFace.
             try:
                 self.model = VisionEncoderDecoderModel.from_pretrained(
                     self.model_ref,
                     **model_kwargs,
                 )
             except (OSError, EnvironmentError):
-                # Local dir has config/tokenizer but no model weights.
-                # Load model weights from the HuggingFace hub instead.
                 print(
                     f"Local checkpoint '{self.model_ref}' has no model weights, "
                     f"loading weights from '{DEFAULT_TROCR_MODEL_ID}'"
@@ -256,7 +279,6 @@ class _TrOCREngine:
                     DEFAULT_TROCR_MODEL_ID,
                     **model_kwargs,
                 )
-
             self.model.to(self.device)
             self.model.eval()
             self.available = True
@@ -325,14 +347,18 @@ def _clean_prediction(text, mode="sentence"):
 
     cleaned = cleaned.strip(".,;:!?\"'`-_=+~")
     tokens = cleaned.split()
-    if (
-        len(tokens) > 1
-        and re.fullmatch(r"\d+", tokens[0])
-        and any(re.search(r"[A-Za-z]", token) for token in tokens[1:])
-    ):
-        tokens = tokens[1:]
-    if len(tokens) > 1 and re.fullmatch(r"[^A-Za-z0-9]+", tokens[0] or ""):
-        tokens = tokens[1:]
+
+    # Only strip leading noise digits/symbols for multi-word predictions,
+    # never for single-word/word-mode — avoids destroying valid short text.
+    if mode != "word" and len(tokens) > 1:
+        if (
+            re.fullmatch(r"\d+", tokens[0])
+            and any(re.search(r"[A-Za-z]", token) for token in tokens[1:])
+        ):
+            tokens = tokens[1:]
+        if len(tokens) > 1 and re.fullmatch(r"[^A-Za-z0-9]+", tokens[0] or ""):
+            tokens = tokens[1:]
+
     cleaned = " ".join(tokens).strip(".,;:!?\"'`-_=+~")
     return cleaned
 
@@ -351,13 +377,13 @@ def _has_model_files(directory):
 
 
 def _preferred_trocr_model_ref():
-    """Resolve which model checkpoint to use.
+    """Resolve which TrOCR checkpoint to use.
 
     Priority order:
       1. AIRDRAW_OCR_MODEL env var (explicit override)
-      2. artifacts/trocr_finetuned  (fine-tuned checkpoint)
-      3. artifacts/trocr_airdraw/best  (training output)
-      4. microsoft/trocr-large-handwritten  (HuggingFace hub)
+      2. artifacts/trocr_finetuned (preferred fine-tuned checkpoint)
+      3. artifacts/trocr_airdraw/best (legacy training output)
+      4. microsoft/trocr-large-handwritten (Hugging Face fallback)
     """
     explicit = os.getenv("AIRDRAW_OCR_MODEL", "").strip()
     if explicit:
@@ -425,30 +451,5 @@ def run_ocr(canvas, mode="sentence", preprocessed=False):
         return ""
     try:
         return engine.predict(canvas, mode=mode, preprocessed=preprocessed)
-    except Exception:   
+    except Exception:
         return ""
-
-def predict_text_from_base64(image_base64: str):
-    import base64
-    from io import BytesIO
-
-    try:
-        # Decode base64
-        if "," in image_base64:
-            image_base64 = image_base64.split(",")[1]
-
-        image_data = base64.b64decode(image_base64)
-        image = Image.open(BytesIO(image_data)).convert("RGB")
-
-        img_np = np.array(image)
-
-        text = run_ocr(img_np, mode="sentence")
-
-        return text
-
-    except Exception as e:
-        print("OCR ERROR:", e)
-        return ""
-
-#git ch 
-#git change
