@@ -3,1338 +3,187 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gesture PDF Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>GesturePDF Pro — Gesture-Controlled PDF Viewer</title>
+  <meta name="description" content="Advanced gesture-controlled PDF viewer with smooth scrolling, highlighting, pen drawing, and notes — powered by MediaPipe hand tracking." />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <style>
-    @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap");
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    :root {
-      --bg: #081018;
-      --bg-accent: #10253a;
-      --panel: rgba(8, 18, 28, 0.92);
-      --panel-strong: #0d1b28;
-      --panel-soft: #122637;
-      --border: rgba(166, 196, 214, 0.16);
-      --text: #f4f7fb;
-      --muted: #8ea3b7;
-      --accent: #ff7a18;
-      --accent-soft: #ffd6ae;
-      --aqua: #55d6ff;
-      --green: #55e5a4;
-      --yellow: #ffd166;
-      --pink: #ff8fa3;
-      --red: #ff6b6b;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
-    }
-
-    body {
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at top left, rgba(85, 214, 255, 0.16), transparent 28%),
-        radial-gradient(circle at top right, rgba(255, 122, 24, 0.18), transparent 24%),
-        linear-gradient(180deg, #081018 0%, #0a1621 100%);
-      color: var(--text);
-      font-family: "Space Grotesk", sans-serif;
-      overflow: hidden;
-    }
-
-    button,
-    input,
-    select {
-      font: inherit;
-    }
-
-    .app-shell {
-      height: 100vh;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 320px;
-      grid-template-rows: auto auto minmax(0, 1fr);
-    }
-
-    .topbar {
-      grid-column: 1 / -1;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      padding: 1rem 1.4rem;
-      border-bottom: 1px solid var(--border);
-      background: rgba(5, 10, 16, 0.72);
-      backdrop-filter: blur(20px);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 0.85rem;
-    }
-
-    .brand-mark {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      background: linear-gradient(135deg, #ff7a18, #ffd166);
-      color: #081018;
-      font-weight: 700;
-      box-shadow: 0 10px 24px rgba(255, 122, 24, 0.26);
-    }
-
-    .brand h1 {
-      font-size: 1.05rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-    }
-
-    .brand p {
-      font-size: 0.86rem;
-      color: var(--muted);
-      margin-top: 0.18rem;
-    }
-
-    .top-actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: flex-end;
-      gap: 0.7rem;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.45rem;
-      padding: 0.45rem 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.03);
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
-
-    .status-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: #5f7388;
-      transition: all 0.2s ease;
-      flex-shrink: 0;
-    }
-
-    .status-dot.active {
-      background: var(--green);
-      box-shadow: 0 0 14px rgba(85, 229, 164, 0.6);
-    }
-
-    .ghost-link,
-    .accent-btn,
-    .control-btn {
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      color: var(--text);
-      text-decoration: none;
-      cursor: pointer;
-      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-    }
-
-    .ghost-link:hover,
-    .accent-btn:hover,
-    .control-btn:hover {
-      transform: translateY(-1px);
-      border-color: rgba(255, 255, 255, 0.24);
-    }
-
-    .ghost-link {
-      padding: 0.6rem 0.9rem;
-      background: rgba(255, 255, 255, 0.04);
-      font-size: 0.82rem;
-    }
-
-    .accent-btn {
-      padding: 0.72rem 1rem;
-      background: linear-gradient(135deg, #ff7a18, #ff9b4a);
-      color: #081018;
-      font-weight: 700;
-      border-color: transparent;
-      box-shadow: 0 10px 22px rgba(255, 122, 24, 0.2);
-    }
-
-    .toolbar {
-      grid-column: 1 / -1;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.65rem;
-      padding: 0.85rem 1.4rem;
-      border-bottom: 1px solid var(--border);
-      background: rgba(9, 18, 28, 0.92);
-    }
-
-    .toolbar-group {
-      display: flex;
-      align-items: center;
-      gap: 0.55rem;
-      padding-right: 0.7rem;
-      margin-right: 0.2rem;
-      border-right: 1px solid var(--border);
-    }
-
-    .toolbar-group:last-child {
-      border-right: 0;
-      padding-right: 0;
-      margin-right: 0;
-    }
-
-    .control-btn {
-      padding: 0.58rem 0.84rem;
-      background: rgba(255, 255, 255, 0.04);
-      font-size: 0.84rem;
-      min-height: 42px;
-    }
-
-    .control-btn.warn {
-      color: var(--yellow);
-    }
-
-    .control-btn.danger {
-      color: var(--pink);
-    }
-
-    .inline-field {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.55rem;
-      color: var(--muted);
-      font-size: 0.8rem;
-    }
-
-    .inline-field input {
-      width: 72px;
-      padding: 0.55rem 0.65rem;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-      text-align: center;
-    }
-
-    .meta-chip {
-      min-width: 78px;
-      text-align: center;
-      font-family: "IBM Plex Mono", monospace;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
-
-    .viewer-area {
-      position: relative;
-      overflow: auto;
-      padding: 1.5rem;
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.015), transparent);
-    }
-
-    .viewer-stage {
-      min-height: 100%;
-      display: grid;
-      place-items: start center;
-    }
-
-    .empty-state {
-      width: min(720px, 100%);
-      min-height: 480px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 1rem;
-      padding: 2.5rem;
-      border: 1px dashed rgba(255, 214, 174, 0.35);
-      border-radius: 28px;
-      background:
-        radial-gradient(circle at top, rgba(255, 122, 24, 0.12), transparent 35%),
-        rgba(255, 255, 255, 0.03);
-      text-align: center;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-      transition: border-color 0.15s ease, background 0.15s ease;
-    }
-
-    .empty-state.drag-over {
-      border-color: rgba(85, 214, 255, 0.65);
-      background:
-        radial-gradient(circle at top, rgba(85, 214, 255, 0.16), transparent 34%),
-        rgba(255, 255, 255, 0.04);
-    }
-
-    .empty-state strong {
-      font-size: 1.4rem;
-      line-height: 1.1;
-    }
-
-    .empty-state p {
-      max-width: 560px;
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 0.94rem;
-    }
-
-    .drop-actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 0.8rem;
-      margin-top: 0.35rem;
-    }
-
-    .viewer-card {
-      position: relative;
-      display: none;
-      border-radius: 24px;
-      overflow: hidden;
-      box-shadow: var(--shadow);
-      background: #101010;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    #pdf-canvas,
-    #overlay-canvas {
-      display: block;
-    }
-
-    #overlay-canvas {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-    }
-
-    .floating-gesture {
-      position: absolute;
-      right: 1.2rem;
-      top: 1.2rem;
-      padding: 0.7rem 0.95rem;
-      border-radius: 14px;
-      background: rgba(5, 10, 16, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(18px);
-      font-weight: 700;
-      font-size: 0.88rem;
-      display: none;
-      z-index: 2;
-    }
-
-    .sidebar {
-      border-left: 1px solid var(--border);
-      background: rgba(8, 18, 28, 0.92);
-      overflow-y: auto;
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.95rem;
-    }
-
-    .panel {
-      padding: 1rem;
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-    }
-
-    .panel h2 {
-      font-size: 0.8rem;
-      letter-spacing: 0.11em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 0.9rem;
-    }
-
-    .stack {
-      display: flex;
-      flex-direction: column;
-      gap: 0.7rem;
-    }
-
-    .stat-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0.7rem;
-    }
-
-    .stat-card {
-      padding: 0.8rem;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .stat-card span {
-      display: block;
-      color: var(--muted);
-      font-size: 0.73rem;
-      margin-bottom: 0.35rem;
-    }
-
-    .stat-card strong {
-      font-size: 1.05rem;
-    }
-
-    .doc-name {
-      font-size: 0.95rem;
-      font-weight: 700;
-      line-height: 1.4;
-      overflow-wrap: anywhere;
-    }
-
-    .subtle {
-      color: var(--muted);
-      font-size: 0.8rem;
-      line-height: 1.6;
-    }
-
-    .camera-box {
-      position: relative;
-      overflow: hidden;
-      border-radius: 18px;
-      background: #02060b;
-      aspect-ratio: 4 / 3;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    #webcam {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transform: scaleX(-1);
-      display: block;
-    }
-
-    #hand-canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-    }
-
-    .color-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.6rem;
-    }
-
-    .color-swatch {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 3px solid transparent;
-      cursor: pointer;
-      transition: transform 0.15s ease, border-color 0.15s ease;
-    }
-
-    .color-swatch.selected {
-      border-color: #ffffff;
-      transform: scale(1.08);
-    }
-
-    .gesture-item {
-      display: grid;
-      grid-template-columns: 42px minmax(0, 1fr);
-      gap: 0.8rem;
-      align-items: center;
-      padding: 0.8rem;
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .gesture-item strong {
-      display: block;
-      font-size: 0.9rem;
-      margin-bottom: 0.15rem;
-    }
-
-    .gesture-item span {
-      color: var(--muted);
-      font-size: 0.8rem;
-      line-height: 1.5;
-    }
-
-    .gesture-icon {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      font-size: 1.2rem;
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .range-input {
-      width: 100%;
-      accent-color: var(--aqua);
-    }
-
-    .full-width {
-      width: 100%;
-    }
-
-    .hidden-input {
-      display: none;
-    }
-
-    @media (max-width: 1080px) {
-      .app-shell {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .sidebar {
-        border-left: 0;
-        border-top: 1px solid var(--border);
-      }
-    }
-
-    @media (max-width: 760px) {
-      body {
-        overflow: auto;
-      }
-
-      .app-shell {
-        height: auto;
-        min-height: 100vh;
-      }
-
-      .viewer-area {
-        min-height: 55vh;
-        padding: 1rem;
-      }
-
-      .toolbar,
-      .topbar {
-        padding-left: 1rem;
-        padding-right: 1rem;
-      }
-
-      .toolbar-group {
-        border-right: 0;
-        padding-right: 0;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/css/pdf-viewer.css" />
 </head>
 
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">PDF</div>
-        <div>
-          <h1>Gesture Controlled PDF Viewer</h1>
-          <p>Pinch to zoom, swipe pages, point to track, and highlight in mid-air.</p>
-        </div>
-      </div>
-      <div class="top-actions">
-        <div class="status-pill">
-          <div class="status-dot" id="camera-status-dot"></div>
-          <span id="camera-status-text">Camera off</span>
-        </div>
-        <a class="ghost-link" href="/">Back To Air Drawing</a>
-        <button class="accent-btn" id="open-file-btn" type="button">Open PDF</button>
-        <input class="hidden-input" id="file-input" type="file" accept="application/pdf" />
-      </div>
-    </header>
 
-    <div class="toolbar">
-      <div class="toolbar-group">
-        <button class="control-btn" id="btn-prev" type="button">Prev</button>
-        <div class="meta-chip" id="page-info">0 / 0</div>
-        <button class="control-btn" id="btn-next" type="button">Next</button>
-      </div>
+  <!-- ═══ HEADER ═══ -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">✋</div>
+      GesturePDF Pro
+    </div>
+    <div class="header-right">
+      <div id="status-dot"></div>
+      <span id="cam-label">Camera off</span>
+    </div>
+  </header>
 
-      <div class="toolbar-group">
-        <button class="control-btn" id="btn-zoom-out" type="button">- Zoom</button>
-        <div class="meta-chip" id="zoom-info">100%</div>
-        <button class="control-btn" id="btn-zoom-in" type="button">+ Zoom</button>
-        <button class="control-btn" id="btn-fit" type="button">Fit Width</button>
-      </div>
+  <!-- ═══ TOOLBAR ═══ -->
+  <div id="toolbar">
+    <button class="tb-btn" id="btn-prev">◀ Prev</button>
+    <span id="page-info">— / —</span>
+    <button class="tb-btn" id="btn-next">Next ▶</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-zoom-out">− Zoom</button>
+    <span id="zoom-info">150%</span>
+    <button class="tb-btn" id="btn-zoom-in">+ Zoom</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-search" style="color: var(--accent2);">🔎 OCR Search</button>
+    <button class="tb-tool-btn active" id="btn-tool-pen" data-tool="pen">✍️ Pen</button>
+    <button class="tb-tool-btn" id="btn-tool-hl" data-tool="highlighter">🟡 Highlight</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn danger-btn" id="btn-clear" style="color: var(--danger);">🗑 Clear Page</button>
+  </div>
 
-      <div class="toolbar-group">
-        <label class="inline-field" for="page-jump">
-          Page
-          <input id="page-jump" type="number" min="1" value="1" />
-        </label>
-        <button class="control-btn" id="btn-go" type="button">Go</button>
-      </div>
+  <!-- ═══ MAIN ═══ -->
+  <div class="main">
 
-      <div class="toolbar-group">
-        <button class="control-btn warn" id="btn-export" type="button">Export Highlights</button>
-        <button class="control-btn danger" id="btn-clear-page" type="button">Clear Page</button>
-        <button class="control-btn danger" id="btn-clear-all" type="button">Clear All</button>
+    <!-- PDF Area -->
+    <div id="pdf-area">
+      <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div class="drop-icon">📄</div>
+        <h2>Open a PDF</h2>
+        <p>Drag & drop your PDF here or click to browse. Then enable your camera for full gesture control.</p>
+        <button class="browse-btn" onclick="event.stopPropagation();document.getElementById('file-input').click()">Browse File</button>
+        <input type="file" id="file-input" accept=".pdf,application/pdf" style="display:none" />
       </div>
+      <div id="pdf-container"></div>
     </div>
 
-    <main class="viewer-area" id="viewer-area">
-      <div class="viewer-stage">
-        <div class="empty-state" id="drop-zone" role="button" tabindex="0" aria-label="Open PDF">
-          <strong>Drop a PDF here to begin</strong>
-          <p>
-            This page is built as a separate PDF endpoint for your project.
-            Once a file is loaded, you can navigate with buttons or gestures, highlight content, and export the saved highlight rectangles as JSON.
-          </p>
-          <div class="drop-actions">
-            <button class="accent-btn" type="button" id="browse-cta">Browse Files</button>
-            <button class="ghost-link" type="button" id="start-camera-btn">Enable Camera</button>
-          </div>
-        </div>
+    <!-- Sidebar -->
+    <aside id="sidebar">
 
-        <div class="viewer-card" id="viewer-card">
-          <canvas id="pdf-canvas"></canvas>
-          <canvas id="overlay-canvas"></canvas>
-          <div class="floating-gesture" id="gesture-label"></div>
+      <!-- Camera Section -->
+      <div class="s-section">
+        <div class="s-title">📹 Hand Tracking</div>
+        <div id="cam-box">
+          <video id="webcam" autoplay playsinline muted></video>
+          <canvas id="hand-canvas"></canvas>
+          <div id="gesture-badge">—</div>
+        </div>
+        <button id="start-btn">📷 Enable Camera</button>
+      </div>
+
+      <!-- Tool & Color -->
+      <div class="s-section">
+        <div class="s-title">🎨 Active Color</div>
+        <div class="color-row" id="color-palette">
+          <div class="swatch selected" data-color="#FFD700" style="background:#FFD700" title="Yellow"></div>
+          <div class="swatch" data-color="#86efac" style="background:#86efac" title="Green"></div>
+          <div class="swatch" data-color="#93c5fd" style="background:#93c5fd" title="Blue"></div>
+          <div class="swatch" data-color="#f9a8d4" style="background:#f9a8d4" title="Pink"></div>
+          <div class="swatch" data-color="#fca5a5" style="background:#fca5a5" title="Red"></div>
+          <div class="swatch" data-color="#d8b4fe" style="background:#d8b4fe" title="Purple"></div>
         </div>
       </div>
-    </main>
 
-    <aside class="sidebar">
-      <section class="panel">
-        <h2>Document</h2>
-        <div class="stack">
-          <div class="doc-name" id="doc-name">No PDF loaded yet</div>
-          <div class="subtle" id="doc-summary">Load a file to activate page rendering and gesture controls.</div>
-          <div class="stat-grid">
-            <div class="stat-card">
-              <span>Pages</span>
-              <strong id="stat-pages">0</strong>
-            </div>
-            <div class="stat-card">
-              <span>Highlights</span>
-              <strong id="stat-highlights">0</strong>
-            </div>
-          </div>
-          <label class="subtle" for="page-slider">Quick scrub</label>
-          <input class="range-input" id="page-slider" type="range" min="1" max="1" value="1" />
+      <!-- Notes -->
+      <div class="s-section">
+        <div class="s-title">📝 Notes & Highlights</div>
+        <div id="notes-list">
+          <div class="notes-empty">No annotations yet</div>
         </div>
-      </section>
+        <div class="notes-actions">
+          <button id="btn-export-notes">📥 Export JSON</button>
+          <button id="btn-clear-all-notes" class="danger">🗑 Clear All</button>
+        </div>
+      </div>
 
-      <section class="panel">
-        <h2>Hand Tracking</h2>
-        <div class="stack">
-          <div class="camera-box">
-            <video id="webcam" autoplay muted playsinline></video>
-            <canvas id="hand-canvas"></canvas>
+      <!-- Search -->
+      <div class="s-section">
+        <div class="s-title">🔎 PDF Search</div>
+        <div class="search-box">
+          <div id="search-preview" class="search-preview empty">Click search to open a transparent writing pad, write the query in air, then pause.</div>
+          <div class="search-actions">
+            <button id="btn-run-search">Open Search Pad</button>
+            <button id="btn-clear-search">Clear Search</button>
           </div>
-          <button class="accent-btn full-width" id="camera-toggle-btn" type="button">Start Camera</button>
-          <div class="subtle" id="gesture-status-copy">No gesture detected yet.</div>
+          <div id="search-status" class="search-status">No search run yet.</div>
+          <div id="search-results" class="search-results"></div>
         </div>
-      </section>
+        <div class="notes-actions" style="margin-top:0.55rem;">
+          <button id="btn-toggle-click-controls">Enable Click Controls</button>
+        </div>
+      </div>
 
-      <section class="panel">
-        <h2>Highlight Color</h2>
-        <div class="color-row">
-          <button class="color-swatch selected" data-color="#FFD166" style="background:#FFD166" type="button" title="Yellow"></button>
-          <button class="color-swatch" data-color="#90F1EF" style="background:#90F1EF" type="button" title="Aqua"></button>
-          <button class="color-swatch" data-color="#98F5A5" style="background:#98F5A5" type="button" title="Green"></button>
-          <button class="color-swatch" data-color="#BDB2FF" style="background:#BDB2FF" type="button" title="Lavender"></button>
-          <button class="color-swatch" data-color="#FF8FAB" style="background:#FF8FAB" type="button" title="Pink"></button>
-          <button class="color-swatch" data-color="#FFAD66" style="background:#FFAD66" type="button" title="Orange"></button>
+      <!-- Gesture Guide -->
+      <div class="s-section">
+        <div class="s-title">🖐️ Gesture Guide</div>
+        <div class="g-item">
+          <div class="g-icon">☝️</div>
+          <div><span class="g-label">Index finger</span><br><span class="g-desc">Works by selected mode (cursor/pen/search)</span></div>
         </div>
-      </section>
+        <div class="g-item">
+          <div class="g-icon">✌️</div>
+          <div><span class="g-label">Two fingers</span><br><span class="g-desc">No action (disabled)</span></div>
+        </div>
+        <div class="g-item">
+          <div class="g-icon">✊</div>
+          <div><span class="g-label">Fist</span><br><span class="g-desc">Smooth scroll PDF up/down</span></div>
+        </div>
+        <div class="g-item">
+          <div class="g-icon">✋</div>
+          <div><span class="g-label">Open hand</span><br><span class="g-desc">No action</span></div>
+        </div>
+        <div class="g-item">
+          <div class="g-icon">🎯</div>
+          <div><span class="g-label">Hover over toolbar</span><br><span class="g-desc">Point at button to select tool</span></div>
+        </div>
+        <div class="g-item">
+          <div class="g-icon">🔎</div>
+          <div><span class="g-label">OCR Search</span><br><span class="g-desc">Select Search, write with index finger, then pause</span></div>
+        </div>
+      </div>
 
-      <section class="panel">
-        <h2>Gesture Guide</h2>
-        <div class="stack">
-          <div class="gesture-item">
-            <div class="gesture-icon">🤏</div>
-            <div>
-              <strong>Pinch</strong>
-              <span>Pinch in or out to zoom the current page.</span>
-            </div>
-          </div>
-          <div class="gesture-item">
-            <div class="gesture-icon">✋</div>
-            <div>
-              <strong>Open Hand Swipe</strong>
-              <span>Move your open hand left or right to change page.</span>
-            </div>
-          </div>
-          <div class="gesture-item">
-            <div class="gesture-icon">✌</div>
-            <div>
-              <strong>Two Fingers</strong>
-              <span>Hold and drag to create a highlight rectangle.</span>
-            </div>
-          </div>
-          <div class="gesture-item">
-            <div class="gesture-icon">☝</div>
-            <div>
-              <strong>Point</strong>
-              <span>Use your index finger as a live cursor over the page.</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Shortcuts</h2>
-        <div class="subtle">
-          Left / Right arrows change pages.<br />
-          + and - zoom.<br />
-          F fits width.<br />
-          Delete clears the current page highlights.
-        </div>
-      </section>
+      <!-- Tips -->
+      <div class="s-section">
+        <div class="s-title">💡 Tips</div>
+        <p class="tips-text">
+          • Keep hand 30–60 cm from camera<br>
+          • Good lighting improves accuracy<br>
+          • Gestures need ~0.3s to activate<br>
+          • Use toolbar buttons as fallback<br>
+          • Click page in Notes to navigate
+        </p>
+      </div>
     </aside>
   </div>
 
-  <script type="module">
-    import { FilesetResolver, HandLandmarker } from "/static/vendor/mediapipe/vision_bundle.mjs";
-
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
-    const MIN_SCALE = 0.5;
-    const MAX_SCALE = 4.5;
-    const PAGE_SWIPE_THRESHOLD = 0.06;
-    const PAGE_COOLDOWN_FRAMES = 18;
-
-    const state = {
-      pdfDoc: null,
-      currentPage: 1,
-      totalPages: 0,
-      scale: 1.2,
-      fitMode: true,
-      highlights: {},
-      highlightColor: "#FFD166",
-      objectUrl: null,
-      docName: "No PDF loaded yet",
-      rendering: false,
-      pendingPage: null,
-      pendingReason: "manual",
-      handLandmarker: null,
-      webcamRunning: false,
-      videoTime: -1,
-      stream: null,
-      isHighlighting: false,
-      highlightStart: null,
-      prevPinchDist: null,
-      lastOpenHandX: null,
-      pageCooldown: 0,
-      gestureTimer: null
-    };
-
-    const pdfCanvas = document.getElementById("pdf-canvas");
-    const pdfCtx = pdfCanvas.getContext("2d");
-    const overlayCanvas = document.getElementById("overlay-canvas");
-    const overlayCtx = overlayCanvas.getContext("2d");
-    const handCanvas = document.getElementById("hand-canvas");
-    const handCtx = handCanvas.getContext("2d");
-    const webcam = document.getElementById("webcam");
-    const viewerArea = document.getElementById("viewer-area");
-    const viewerCard = document.getElementById("viewer-card");
-    const dropZone = document.getElementById("drop-zone");
-    const fileInput = document.getElementById("file-input");
-    const openFileBtn = document.getElementById("open-file-btn");
-    const browseCta = document.getElementById("browse-cta");
-    const startCameraBtn = document.getElementById("start-camera-btn");
-    const cameraToggleBtn = document.getElementById("camera-toggle-btn");
-    const cameraStatusDot = document.getElementById("camera-status-dot");
-    const cameraStatusText = document.getElementById("camera-status-text");
-    const gestureLabel = document.getElementById("gesture-label");
-    const gestureStatusCopy = document.getElementById("gesture-status-copy");
-    const pageInfo = document.getElementById("page-info");
-    const zoomInfo = document.getElementById("zoom-info");
-    const pageJump = document.getElementById("page-jump");
-    const pageSlider = document.getElementById("page-slider");
-    const statPages = document.getElementById("stat-pages");
-    const statHighlights = document.getElementById("stat-highlights");
-    const docName = document.getElementById("doc-name");
-    const docSummary = document.getElementById("doc-summary");
-
-    function updateHeaderState() {
-      cameraStatusDot.classList.toggle("active", state.webcamRunning);
-      cameraStatusText.textContent = state.webcamRunning ? "Camera live" : "Camera off";
-      cameraToggleBtn.textContent = state.webcamRunning ? "Camera Running" : "Start Camera";
-    }
-
-    function updateDocMeta() {
-      docName.textContent = state.docName;
-      statPages.textContent = String(state.totalPages);
-      pageInfo.textContent = `${state.currentPage} / ${state.totalPages || 0}`;
-      zoomInfo.textContent = `${Math.round(state.scale * 100)}%`;
-      pageJump.value = String(state.currentPage || 1);
-      pageJump.max = String(state.totalPages || 1);
-      pageSlider.max = String(state.totalPages || 1);
-      pageSlider.value = String(state.currentPage || 1);
-      statHighlights.textContent = String(getHighlightCount());
-      docSummary.textContent = state.pdfDoc
-        ? `${state.totalPages} page PDF loaded. Gesture controls are ready once the camera is enabled.`
-        : "Load a file to activate page rendering and gesture controls.";
-    }
-
-    function getHighlightCount() {
-      return Object.values(state.highlights).reduce((sum, items) => sum + items.length, 0);
-    }
-
-    function normalizedRectFromCanvas(x1, y1, x2, y2) {
-      const x = Math.min(x1, x2);
-      const y = Math.min(y1, y2);
-      const w = Math.abs(x2 - x1);
-      const h = Math.abs(y2 - y1);
-      return {
-        x: x / overlayCanvas.width,
-        y: y / overlayCanvas.height,
-        w: w / overlayCanvas.width,
-        h: h / overlayCanvas.height,
-        color: state.highlightColor
-      };
-    }
-
-    function canvasRectFromNormalized(rect) {
-      return {
-        x: rect.x * overlayCanvas.width,
-        y: rect.y * overlayCanvas.height,
-        w: rect.w * overlayCanvas.width,
-        h: rect.h * overlayCanvas.height,
-        color: rect.color
-      };
-    }
-
-    function drawHighlights(pageNumber, liveRect = null) {
-      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-      const rects = state.highlights[pageNumber] || [];
-
-      rects.forEach((rect) => {
-        const scaled = canvasRectFromNormalized(rect);
-        overlayCtx.save();
-        overlayCtx.globalAlpha = 0.36;
-        overlayCtx.fillStyle = scaled.color;
-        overlayCtx.fillRect(scaled.x, scaled.y, scaled.w, scaled.h);
-        overlayCtx.restore();
-      });
-
-      if (liveRect) {
-        overlayCtx.save();
-        overlayCtx.globalAlpha = 0.45;
-        overlayCtx.fillStyle = liveRect.color;
-        overlayCtx.fillRect(liveRect.x, liveRect.y, liveRect.w, liveRect.h);
-        overlayCtx.restore();
-      }
-    }
-
-    function showGesture(text, color) {
-      gestureLabel.textContent = text;
-      gestureLabel.style.color = color;
-      gestureLabel.style.display = "block";
-      gestureStatusCopy.textContent = text;
-      clearTimeout(state.gestureTimer);
-      state.gestureTimer = setTimeout(() => {
-        gestureLabel.style.display = "none";
-      }, 1200);
-    }
-
-    function dist2D(a, b) {
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    }
-
-    function getGesture(hand) {
-      const thumbTip = hand[4];
-      const indexTip = hand[8];
-      const middleTip = hand[12];
-      const ringTip = hand[16];
-      const pinkyTip = hand[20];
-      const indexMcp = hand[5];
-      const middleMcp = hand[9];
-      const ringMcp = hand[13];
-      const pinkyMcp = hand[17];
-      const wrist = hand[0];
-
-      const indexUp = indexTip.y < indexMcp.y;
-      const middleUp = middleTip.y < middleMcp.y;
-      const ringUp = ringTip.y < ringMcp.y;
-      const pinkyUp = pinkyTip.y < pinkyMcp.y;
-      const pinchDist = dist2D(thumbTip, indexTip);
-
-      if (indexUp && middleUp && !ringUp && !pinkyUp) {
-        return { type: "highlight", indexTip };
-      }
-
-      if (indexUp && !middleUp && !ringUp && !pinkyUp) {
-        return { type: "point", indexTip };
-      }
-
-      if (indexUp && middleUp && ringUp && pinkyUp) {
-        return { type: "open", wrist };
-      }
-
-      return { type: "pinch", pinchDist, indexTip };
-    }
-
-    async function fitToWidth(pageNumber = state.currentPage) {
-      if (!state.pdfDoc) {
-        return;
-      }
-      const page = await state.pdfDoc.getPage(pageNumber);
-      const baseViewport = page.getViewport({ scale: 1 });
-      const availableWidth = Math.max(viewerArea.clientWidth - 64, 300);
-      state.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, availableWidth / baseViewport.width));
-      state.fitMode = true;
-      queueRender(pageNumber, "fit");
-    }
-
-    async function renderPage(pageNumber) {
-      if (!state.pdfDoc) {
-        return;
-      }
-
-      state.rendering = true;
-      const page = await state.pdfDoc.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: state.scale });
-
-      pdfCanvas.width = viewport.width;
-      pdfCanvas.height = viewport.height;
-      overlayCanvas.width = viewport.width;
-      overlayCanvas.height = viewport.height;
-      viewerCard.style.display = "block";
-      dropZone.style.display = "none";
-
-      await page.render({
-        canvasContext: pdfCtx,
-        viewport
-      }).promise;
-
-      drawHighlights(pageNumber);
-      updateDocMeta();
-      state.rendering = false;
-
-      if (state.pendingPage !== null) {
-        const nextPage = state.pendingPage;
-        state.pendingPage = null;
-        queueRender(nextPage, state.pendingReason);
-      }
-    }
-
-    function queueRender(pageNumber, reason = "manual") {
-      if (!state.pdfDoc) {
-        return;
-      }
-      if (state.rendering) {
-        state.pendingPage = pageNumber;
-        state.pendingReason = reason;
-        return;
-      }
-      state.currentPage = pageNumber;
-      renderPage(pageNumber).catch((error) => {
-        console.error("Failed to render PDF page", error);
-        showGesture("Could not render page", "var(--red)");
-        state.rendering = false;
-      });
-    }
-
-    async function loadPdfFromSource(src, fileName) {
-      if (state.objectUrl) {
-        URL.revokeObjectURL(state.objectUrl);
-        state.objectUrl = null;
-      }
-
-      if (typeof src === "string" && src.startsWith("blob:")) {
-        state.objectUrl = src;
-      }
-
-      const loadingTask = pdfjsLib.getDocument(src);
-      state.pdfDoc = await loadingTask.promise;
-      state.totalPages = state.pdfDoc.numPages;
-      state.currentPage = 1;
-      state.docName = fileName || "Untitled PDF";
-      pageSlider.min = "1";
-      pageSlider.max = String(state.totalPages);
-      state.fitMode = true;
-      await fitToWidth(1);
-      updateDocMeta();
-    }
-
-    async function handlePdfFile(file) {
-      if (!file || file.type !== "application/pdf") {
-        showGesture("Please choose a PDF file", "var(--red)");
-        return;
-      }
-      const url = URL.createObjectURL(file);
-      await loadPdfFromSource(url, file.name);
-    }
-
-    function movePage(delta) {
-      if (!state.pdfDoc) {
-        return;
-      }
-      const nextPage = Math.min(state.totalPages, Math.max(1, state.currentPage + delta));
-      if (nextPage !== state.currentPage) {
-        queueRender(nextPage, "page");
-      }
-    }
-
-    function setZoom(nextScale) {
-      if (!state.pdfDoc) {
-        return;
-      }
-      const clamped = Math.max(MIN_SCALE, Math.min(MAX_SCALE, nextScale));
-      if (Math.abs(clamped - state.scale) < 0.01) {
-        return;
-      }
-      state.scale = clamped;
-      state.fitMode = false;
-      queueRender(state.currentPage, "zoom");
-    }
-
-    function clearPageHighlights() {
-      if (!state.pdfDoc) {
-        return;
-      }
-      state.highlights[state.currentPage] = [];
-      drawHighlights(state.currentPage);
-      updateDocMeta();
-    }
-
-    function clearAllHighlights() {
-      state.highlights = {};
-      drawHighlights(state.currentPage);
-      updateDocMeta();
-    }
-
-    function exportHighlights() {
-      const payload = {
-        document: state.docName,
-        pages: state.totalPages,
-        highlights: state.highlights
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "pdf-highlights.json";
-      link.click();
-      URL.revokeObjectURL(url);
-    }
-
-    function drawCursor(x, y) {
-      overlayCtx.save();
-      overlayCtx.beginPath();
-      overlayCtx.arc(x, y, 11, 0, Math.PI * 2);
-      overlayCtx.strokeStyle = "#55d6ff";
-      overlayCtx.lineWidth = 3;
-      overlayCtx.stroke();
-      overlayCtx.beginPath();
-      overlayCtx.arc(x, y, 4, 0, Math.PI * 2);
-      overlayCtx.fillStyle = "#55d6ff";
-      overlayCtx.fill();
-      overlayCtx.restore();
-    }
-
-    function drawSkeleton(landmarks) {
-      const width = handCanvas.width;
-      const height = handCanvas.height;
-      const connections = [
-        [0, 1], [1, 2], [2, 3], [3, 4],
-        [0, 5], [5, 6], [6, 7], [7, 8],
-        [5, 9], [9, 10], [10, 11], [11, 12],
-        [9, 13], [13, 14], [14, 15], [15, 16],
-        [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
-      ];
-
-      handCtx.clearRect(0, 0, width, height);
-      handCtx.strokeStyle = "rgba(85, 214, 255, 0.9)";
-      handCtx.lineWidth = 2;
-
-      connections.forEach(([a, b]) => {
-        const start = landmarks[a];
-        const end = landmarks[b];
-        handCtx.beginPath();
-        handCtx.moveTo((1 - start.x) * width, start.y * height);
-        handCtx.lineTo((1 - end.x) * width, end.y * height);
-        handCtx.stroke();
-      });
-
-      landmarks.forEach((point, index) => {
-        handCtx.beginPath();
-        handCtx.arc((1 - point.x) * width, point.y * height, index === 8 ? 6 : 4, 0, Math.PI * 2);
-        handCtx.fillStyle = index === 8 ? "#ffd166" : "rgba(85, 214, 255, 0.95)";
-        handCtx.fill();
-      });
-    }
-
-    async function initHandLandmarker() {
-      if (state.handLandmarker) {
-        return state.handLandmarker;
-      }
-
-      const vision = await FilesetResolver.forVisionTasks("/static/vendor/mediapipe/wasm");
-      state.handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "/hand_landmarker.task",
-          delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        numHands: 1
-      });
-      return state.handLandmarker;
-    }
-
-    async function startCamera() {
-      if (state.webcamRunning) {
-        return;
-      }
-
-      cameraToggleBtn.disabled = true;
-      cameraToggleBtn.textContent = "Loading Camera...";
-      try {
-        await initHandLandmarker();
-
-        state.stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
-
-        webcam.srcObject = state.stream;
-        webcam.addEventListener("loadeddata", () => {
-          handCanvas.width = webcam.videoWidth;
-          handCanvas.height = webcam.videoHeight;
-          state.webcamRunning = true;
-          updateHeaderState();
-          cameraToggleBtn.disabled = false;
-          predictWebcam();
-        }, { once: true });
-      } catch (error) {
-        console.error("Unable to start camera", error);
-        state.webcamRunning = false;
-        cameraToggleBtn.disabled = false;
-        cameraToggleBtn.textContent = "Start Camera";
-        updateHeaderState();
-        showGesture("Camera access failed", "var(--red)");
-      }
-    }
-
-    function endHighlight() {
-      if (!state.isHighlighting || !state.highlightStart || !state.pdfDoc) {
-        state.isHighlighting = false;
-        state.highlightStart = null;
-        return;
-      }
-
-      const rect = normalizedRectFromCanvas(
-        state.highlightStart.x,
-        state.highlightStart.y,
-        state.highlightStart.x2,
-        state.highlightStart.y2
-      );
-
-      if (rect.w > 0.01 && rect.h > 0.01) {
-        if (!state.highlights[state.currentPage]) {
-          state.highlights[state.currentPage] = [];
-        }
-        state.highlights[state.currentPage].push(rect);
-        updateDocMeta();
-      }
-
-      state.isHighlighting = false;
-      state.highlightStart = null;
-      drawHighlights(state.currentPage);
-    }
-
-    async function predictWebcam() {
-      if (!state.webcamRunning || !state.handLandmarker) {
-        return;
-      }
-
-      if (webcam.currentTime !== state.videoTime) {
-        state.videoTime = webcam.currentTime;
-        const results = state.handLandmarker.detectForVideo(webcam, performance.now());
-
-        if (results.landmarks && results.landmarks.length > 0) {
-          const hand = results.landmarks[0];
-          const gesture = getGesture(hand);
-          drawSkeleton(hand);
-          if (state.pdfDoc) {
-            drawHighlights(state.currentPage);
-          }
-
-          if (gesture.type === "pinch") {
-            if (state.prevPinchDist !== null && state.pdfDoc) {
-              const delta = (gesture.pinchDist - state.prevPinchDist) * 8;
-              setZoom(state.scale + delta);
-            }
-            state.prevPinchDist = gesture.pinchDist;
-            showGesture("Pinch zoom", "#55e5a4");
-            state.lastOpenHandX = null;
-            if (state.isHighlighting) {
-              endHighlight();
-            }
-          } else {
-            state.prevPinchDist = null;
-          }
-
-          if (gesture.type === "open") {
-            if (state.pageCooldown > 0) {
-              state.pageCooldown -= 1;
-            } else if (state.lastOpenHandX !== null) {
-              const deltaX = gesture.wrist.x - state.lastOpenHandX;
-              if (deltaX > PAGE_SWIPE_THRESHOLD && state.currentPage > 1) {
-                movePage(-1);
-                state.pageCooldown = PAGE_COOLDOWN_FRAMES;
-                showGesture("Previous page", "#55d6ff");
-              } else if (deltaX < -PAGE_SWIPE_THRESHOLD && state.currentPage < state.totalPages) {
-                movePage(1);
-                state.pageCooldown = PAGE_COOLDOWN_FRAMES;
-                showGesture("Next page", "#ff8fa3");
-              }
-            }
-            state.lastOpenHandX = gesture.wrist.x;
-          } else {
-            state.lastOpenHandX = null;
-            state.pageCooldown = Math.max(0, state.pageCooldown - 1);
-          }
-
-          if (gesture.type === "highlight" && state.pdfDoc) {
-            const x = (1 - gesture.indexTip.x) * overlayCanvas.width;
-            const y = gesture.indexTip.y * overlayCanvas.height;
-            if (!state.isHighlighting) {
-              state.isHighlighting = true;
-              state.highlightStart = { x, y, x2: x, y2: y };
-            }
-            state.highlightStart.x2 = x;
-            state.highlightStart.y2 = y;
-            const liveRect = {
-              x: Math.min(state.highlightStart.x, x),
-              y: Math.min(state.highlightStart.y, y),
-              w: Math.abs(x - state.highlightStart.x),
-              h: Math.max(Math.abs(y - state.highlightStart.y), 24),
-              color: state.highlightColor
-            };
-            state.highlightStart.y2 = state.highlightStart.y + liveRect.h;
-            drawHighlights(state.currentPage, liveRect);
-            showGesture("Highlight mode", "#ffd166");
-          } else if (state.isHighlighting) {
-            endHighlight();
-          }
-
-          if (gesture.type === "point" && state.pdfDoc) {
-            const x = (1 - gesture.indexTip.x) * overlayCanvas.width;
-            const y = gesture.indexTip.y * overlayCanvas.height;
-            drawHighlights(state.currentPage);
-            drawCursor(x, y);
-            showGesture("Pointer", "#55d6ff");
-          }
-        } else {
-          handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
-          state.prevPinchDist = null;
-          state.lastOpenHandX = null;
-          if (state.isHighlighting) {
-            endHighlight();
-          }
-        }
-      }
-
-      requestAnimationFrame(predictWebcam);
-    }
-
-    function onFileDrop(event) {
-      event.preventDefault();
-      dropZone.classList.remove("drag-over");
-      const file = event.dataTransfer?.files?.[0];
-      if (file) {
-        handlePdfFile(file);
-      }
-    }
-
-    openFileBtn.addEventListener("click", () => fileInput.click());
-    browseCta.addEventListener("click", () => fileInput.click());
-    dropZone.addEventListener("click", () => fileInput.click());
-    dropZone.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        fileInput.click();
-      }
-    });
-    dropZone.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      dropZone.classList.add("drag-over");
-    });
-    dropZone.addEventListener("dragleave", () => {
-      dropZone.classList.remove("drag-over");
-    });
-    dropZone.addEventListener("drop", onFileDrop);
-    fileInput.addEventListener("change", async (event) => {
-      const file = event.target.files?.[0];
-      if (file) {
-        await handlePdfFile(file);
-      }
-      event.target.value = "";
-    });
-
-    document.getElementById("btn-prev").addEventListener("click", () => movePage(-1));
-    document.getElementById("btn-next").addEventListener("click", () => movePage(1));
-    document.getElementById("btn-zoom-in").addEventListener("click", () => setZoom(state.scale + 0.2));
-    document.getElementById("btn-zoom-out").addEventListener("click", () => setZoom(state.scale - 0.2));
-    document.getElementById("btn-fit").addEventListener("click", () => fitToWidth());
-    document.getElementById("btn-go").addEventListener("click", () => {
-      const nextPage = Number(pageJump.value);
-      if (state.pdfDoc && Number.isFinite(nextPage)) {
-        queueRender(Math.min(state.totalPages, Math.max(1, nextPage)), "jump");
-      }
-    });
-    document.getElementById("btn-clear-page").addEventListener("click", clearPageHighlights);
-    document.getElementById("btn-clear-all").addEventListener("click", clearAllHighlights);
-    document.getElementById("btn-export").addEventListener("click", exportHighlights);
-    startCameraBtn.addEventListener("click", startCamera);
-    cameraToggleBtn.addEventListener("click", startCamera);
-    pageSlider.addEventListener("input", () => {
-      if (state.pdfDoc) {
-        queueRender(Number(pageSlider.value), "slider");
-      }
-    });
-
-    document.querySelectorAll(".color-swatch").forEach((button) => {
-      button.addEventListener("click", () => {
-        document.querySelectorAll(".color-swatch").forEach((item) => item.classList.remove("selected"));
-        button.classList.add("selected");
-        state.highlightColor = button.dataset.color;
-      });
-    });
-
-    window.addEventListener("resize", () => {
-      if (state.pdfDoc && state.fitMode) {
-        fitToWidth(state.currentPage);
-      }
-    });
-
-    window.addEventListener("keydown", (event) => {
-      if (!state.pdfDoc) {
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        movePage(1);
-      } else if (event.key === "ArrowLeft") {
-        movePage(-1);
-      } else if (event.key === "+" || event.key === "=") {
-        setZoom(state.scale + 0.2);
-      } else if (event.key === "-" || event.key === "_") {
-        setZoom(state.scale - 0.2);
-      } else if (event.key.toLowerCase() === "f") {
-        fitToWidth();
-      } else if (event.key === "Delete" || event.key === "Backspace") {
-        clearPageHighlights();
-      }
-    });
-
-    updateHeaderState();
-    updateDocMeta();
-  </script>
+  <!-- Virtual floating toolbar (gesture-selectable) -->
+  <div class="virtual-toolbar" id="virtual-toolbar">
+    <div class="v-btn active" data-tool="cursor">🖱 Cursor</div>
+    <div class="v-btn" data-tool="pen">✍️ Pen</div>
+    <div class="v-btn" data-tool="search">🔎 Search</div>
+  </div>
+
+  <!-- Gesture pill (floating indicator) -->
+  <div id="gesture-pill">
+    <div class="dot"></div>
+    <span id="pill-text">—</span>
+  </div>
+
+  <!-- Transparent overlay for temporary search handwriting -->
+  <div id="search-overlay-layer">
+    <canvas id="search-overlay-canvas"></canvas>
+    <div id="search-overlay-hint">Write your search text in the air, then pause for auto-search.</div>
+  </div>
+
+  <!-- Cursor overlay -->
+  <canvas id="cursor-canvas"></canvas>
+
+  <script type="module" src="/static/js/pdf-viewer/main.js"></script>
 </body>
 
 </html>

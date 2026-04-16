@@ -55,6 +55,7 @@ const eraseBtn       = document.getElementById("btn-erase");
 const undoBtn        = document.getElementById("btn-undo");
 const redoBtn        = document.getElementById("btn-redo");
 const focusBtn       = document.getElementById("btn-focus");
+const pdfViewerBtn   = document.getElementById("btn-pdf-viewer");
 const canvasWrapper  = document.getElementById("canvas-wrapper");
 const handLossEl     = document.getElementById("hand-loss-indicator");
 const colorBtnsEl    = document.getElementById("color-btns");
@@ -1075,6 +1076,9 @@ eraseBtn.onclick = () => setEraserMode(!state.eraserMode);
 undoBtn.onclick  = () => undoLastAction();
 redoBtn.onclick  = () => redoLastAction();
 focusBtn.onclick = () => setFocusMode(!state.focusMode);
+if (pdfViewerBtn) {
+  pdfViewerBtn.onclick = () => { window.location.href = "/pdfviewer"; };
+}
 
 document.getElementById("btn-clear").onclick = () => {
   pushUndoSnapshot();
