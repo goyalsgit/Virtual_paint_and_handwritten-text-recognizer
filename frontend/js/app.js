@@ -63,6 +63,16 @@ const colorBtnsEl    = document.getElementById("color-btns");
 // Pointer smoother (reduces hand tracking jitter)
 const pointerFilter = new PointFilter();
 
+// ── OCR bar helpers ──────────────────────────────────────────────
+function showOcrBar() {
+  ocrBar.style.display = "flex";
+  ocrBar.classList.add("visible");
+}
+function hideOcrBar() {
+  hideOcrBar();
+  ocrBar.classList.remove("visible");
+}
+
 
 // ═══════════════════════════════════════════════════════════════════
 // 2. HELPER FUNCTIONS
@@ -283,6 +293,7 @@ function drawAtPoint(cx, cy, nowSec) {
   }
 
   state.lastDrawT = nowSec;
+  markMinimapDirty();
 
   // Draw cursor on overlay (screen space)
   oCtx.strokeStyle = "#000";
@@ -319,6 +330,7 @@ function eraseAtPoint(cx, cy, nowSec) {
   oCtx.stroke();
 
   state.lastDrawT = nowSec;
+  markMinimapDirty();
 }
 
 
@@ -333,7 +345,38 @@ function applyPan() {
   const pctX = Math.round((state.panX / (VIRTUAL_W - vpW)) * 100) || 0;
   const pctY = Math.round((state.panY / (VIRTUAL_H - vpH)) * 100) || 0;
   const el = document.getElementById("pan-indicator");
-  if (el) el.textContent = `Canvas: ${pctX}% → ${pctY}% ↓`;
+  if (el) el.textContent = `${pctX}% ${pctY}%`;
+  updateMinimap();
+}
+
+// ── Minimap ──────────────────────────────────────────────────────
+const minimapCanvas   = document.getElementById("minimap-canvas");
+const minimapViewport = document.getElementById("minimap-viewport");
+const mmCtx = minimapCanvas ? minimapCanvas.getContext("2d") : null;
+let minimapDirty = true;
+
+function markMinimapDirty() { minimapDirty = true; }
+
+function updateMinimap() {
+  const mm = document.getElementById("minimap");
+  if (!mm || !mmCtx) return;
+  const mmW = mm.clientWidth;
+  const mmH = mm.clientHeight;
+  if (minimapCanvas.width !== mmW) minimapCanvas.width = mmW;
+  if (minimapCanvas.height !== mmH) minimapCanvas.height = mmH;
+  const scaleX = mmW / VIRTUAL_W;
+  const scaleY = mmH / VIRTUAL_H;
+  if (minimapDirty) {
+    mmCtx.clearRect(0, 0, mmW, mmH);
+    mmCtx.drawImage(drawCanvas, 0, 0, VIRTUAL_W, VIRTUAL_H, 0, 0, mmW, mmH);
+    minimapDirty = false;
+  }
+  const vpW = overCanvas.width;
+  const vpH = overCanvas.height;
+  minimapViewport.style.left   = Math.round(state.panX * scaleX) + "px";
+  minimapViewport.style.top    = Math.round(state.panY * scaleY) + "px";
+  minimapViewport.style.width  = Math.round(vpW * scaleX) + "px";
+  minimapViewport.style.height = Math.round(vpH * scaleY) + "px";
 }
 
 function resizeCanvases() {
@@ -527,13 +570,13 @@ async function triggerOCR() {
   if (state.ocrInFlight || !state.wsReady) {
     if (!state.wsReady) {
       ocrText.textContent = "Not connected to server";
-      ocrBar.style.display = "block";
+      showOcrBar();
     }
     return;
   }
   if (!canvasHasInk()) {
     ocrText.textContent = "Draw some text first";
-    ocrBar.style.display = "block";
+    showOcrBar();
     return;
   }
 
@@ -558,11 +601,12 @@ async function triggerOCR() {
     ocrText.textContent = state.inFlightContinuous
       ? (state.continuousTextBuffer + " Recognizing...").trim()
       : "Recognizing...";
-    ocrBar.style.display = "block";
+    ocrText.classList.add("recognizing");
+    showOcrBar();
   } catch (e) {
     state.ocrInFlight = false;
     ocrText.textContent = `Could not prepare handwriting: ${e.message}`;
-    ocrBar.style.display = "block";
+    showOcrBar();
   }
 }
 
@@ -573,7 +617,7 @@ async function triggerOCRAll() {
   const b64 = buildOcrImageAll();
   if (!b64) {
     ocrText.textContent = "Nothing written on canvas";
-    ocrBar.style.display = "block";
+    showOcrBar();
     return;
   }
 
@@ -593,11 +637,12 @@ async function triggerOCRAll() {
       preprocessed: true,
     }));
     ocrText.textContent = "Scanning full canvas...";
-    ocrBar.style.display = "block";
+    ocrText.classList.add("recognizing");
+    showOcrBar();
   } catch (e) {
     state.ocrInFlight = false;
     ocrText.textContent = `OCR All failed: ${e.message}`;
-    ocrBar.style.display = "block";
+    showOcrBar();
   }
 }
 
@@ -738,6 +783,7 @@ function connectWS() {
 
       if (msg.type === "ocr_result") {
         state.ocrInFlight = false;
+        ocrText.classList.remove("recognizing");
         if (msg.success && msg.text) {
           if (state.inFlightContinuous) {
             state.continuousTextBuffer = (state.continuousTextBuffer + " " + msg.text).trim();
@@ -747,18 +793,20 @@ function connectWS() {
           } else {
             ocrText.textContent = msg.text;
           }
+          if (window.addOcrToHistory) window.addOcrToHistory(msg.text);
         } else {
           ocrText.textContent = state.inFlightContinuous
             ? state.continuousTextBuffer + " [Could not recognize]"
             : "Could not recognize — try writing larger";
         }
-        ocrBar.style.display = "block";
+        showOcrBar();
       }
 
       if (msg.type === "error") {
         state.ocrInFlight = false;
+        ocrText.classList.remove("recognizing");
         ocrText.textContent = msg.message || "OCR failed";
-        ocrBar.style.display = "block";
+        showOcrBar();
       }
     };
   } catch (e) {
@@ -913,7 +961,7 @@ const vbtnCallbacks = {
   clear() {
     pushUndoSnapshot();
     dCtx.clearRect(0, 0, VIRTUAL_W, VIRTUAL_H);
-    ocrBar.style.display = "none";
+    hideOcrBar();
     ocrText.textContent = "";
     state.continuousTextBuffer = "";
     state.lastDrawT = 0;
@@ -1083,7 +1131,7 @@ if (pdfViewerBtn) {
 document.getElementById("btn-clear").onclick = () => {
   pushUndoSnapshot();
   dCtx.clearRect(0, 0, VIRTUAL_W, VIRTUAL_H);
-  ocrBar.style.display = "none";
+  hideOcrBar();
   ocrText.textContent = "";
   state.continuousTextBuffer = "";
   state.lastDrawT = 0;

@@ -60,13 +60,50 @@ header {
   z-index: 200;
 }
 
+/* Each header section takes equal width so logo is truly centered */
+header > * {
+  flex: 1;
+}
+header > .logo {
+  justify-content: center;
+}
+header > .header-right {
+  justify-content: flex-end;
+}
+
 .logo {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   font-weight: 700;
   font-size: 0.95rem;
   letter-spacing: -0.3px;
+}
+
+/* Back to canvas button */
+.back-to-canvas {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.back-to-canvas:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+  color: var(--text);
+}
+.back-to-canvas svg {
+  flex-shrink: 0;
 }
 
 .logo-icon {
@@ -89,6 +126,7 @@ header {
 .header-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.6rem;
   font-size: 0.75rem;
   color: var(--muted);
