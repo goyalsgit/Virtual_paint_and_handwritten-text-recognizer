@@ -48,11 +48,15 @@ body {
 
 /* Generic toolbar button */
 .tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px 14px;
   border-radius: 6px;
   border: 1px solid #444;
   background: #1e1e2e;
   color: #ccc;
+  text-decoration: none;
   cursor: pointer;
   font-size: 13px;
   transition: background 0.15s, border-color 0.15s;
