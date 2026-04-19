@@ -1,43 +1,47 @@
 # Training Guide
 
-This project now keeps only the TrOCR path for handwritten text recognition.
+This folder contains the full TrOCR training pipeline used by this project.
 
-Use these files:
+## Files in this folder
 
-- `training/COLAB_TROCR_GUIDE.md`
-- `training/prepare_manifests.py`
-- `training/prepare_iam_manifests.py`
-- `training/train_trocr.py`
-- `training/predict_trocr.py`
+- training/prepare_manifests.py
+- training/train_trocr.py
+- training/predict_trocr.py
+- training/requirements.txt
 
-## Recommended path
+## End-to-end training flow
 
 1. Collect labeled samples from the app.
-2. Build `train/val/test` manifests.
-3. Fine-tune TrOCR.
-4. Place the final checkpoint in `artifacts/trocr_airdraw/best`.
+2. Verify custom_dataset/labels.csv and custom_dataset/images are correct.
+3. Build train/val/test manifests.
+4. Fine-tune TrOCR on those manifests.
+5. Test the trained checkpoint.
 
-## Install training dependencies
+## Install dependencies
 
 ```bash
 pip install -r training/requirements.txt
 ```
 
-## Build manifests from your own app data
+## Build manifests
+
+This reads custom_dataset/labels.csv and writes:
+
+- data/manifests/train.jsonl
+- data/manifests/val.jsonl
+- data/manifests/test.jsonl
 
 ```bash
 python training/prepare_manifests.py
 ```
 
-## Build manifests from IAM
+Optional split ratios:
 
 ```bash
-python training/prepare_iam_manifests.py \
-  --iam-root /path/to/iam \
-  --output-dir data/iam_manifests
+python training/prepare_manifests.py --val-ratio 0.1 --test-ratio 0.05
 ```
 
-## Fine-tune TrOCR on your own data
+## Fine-tune TrOCR
 
 ```bash
 python training/train_trocr.py \
@@ -47,21 +51,26 @@ python training/train_trocr.py \
   --output-dir artifacts/trocr_airdraw
 ```
 
-## Fine-tune TrOCR on IAM
+Best checkpoint is saved under:
 
-```bash
-python training/train_trocr.py \
-  --train-manifest data/iam_manifests/train.jsonl \
-  --val-manifest data/iam_manifests/val.jsonl \
-  --test-manifest data/iam_manifests/test.jsonl \
-  --output-dir artifacts/trocr_iam
-```
+- artifacts/trocr_airdraw/best
 
 ## Test a checkpoint
+
+Use one sample image from custom_dataset/images:
+
+```bash
+python training/predict_trocr.py \
+  --model-dir artifacts/trocr_large_model \
+  --image custom_dataset/images/20260408T043647061329.png \
+  --mode sentence
+```
+
+You can replace model-dir with your own trained checkpoint, for example:
 
 ```bash
 python training/predict_trocr.py \
   --model-dir artifacts/trocr_airdraw/best \
-  --image data/collected/words/train/20260402T070012849907.png \
+  --image custom_dataset/images/20260408T043647061329.png \
   --mode sentence
 ```

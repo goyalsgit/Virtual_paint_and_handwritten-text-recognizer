@@ -163,9 +163,42 @@
 
   <!-- Virtual floating toolbar (gesture-selectable) -->
   <div class="virtual-toolbar" id="virtual-toolbar">
+    <!-- Tool Selection -->
     <div class="v-btn active" data-tool="cursor">🖱 Cursor</div>
     <div class="v-btn" data-tool="pen">✍️ Pen</div>
+    <div class="v-btn" data-tool="highlighter">🟡 Highlight</div>
+    <div class="v-btn" data-tool="eraser">🧹 Eraser</div>
     <div class="v-btn" data-tool="search">🔎 Search</div>
+    
+    <!-- Separator -->
+    <div class="v-separator"></div>
+    
+    <!-- Zoom Controls -->
+    <div class="v-btn v-zoom-btn" data-action="zoom-in">🔍+ Zoom In</div>
+    <div class="v-btn v-zoom-btn" data-action="zoom-out">🔍- Zoom Out</div>
+    
+    <!-- Separator -->
+    <div class="v-separator"></div>
+    
+    <!-- Brush Size Controls -->
+    <div class="v-btn v-brush-btn" data-action="brush-increase">🖌️+ Bigger</div>
+    <div class="v-btn v-brush-btn" data-action="brush-decrease">🖌️- Smaller</div>
+    
+    <!-- Separator -->
+    <div class="v-separator"></div>
+    
+    <!-- Clear Search Button -->
+    <div class="v-btn v-action-btn" data-action="clear-search">🧹 Clear Search</div>
+    
+    <!-- Separator -->
+    <div class="v-separator"></div>
+    
+    <!-- Color Picker -->
+    <div class="v-btn v-color-btn" data-color="#FFD700" style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);">🟡</div>
+    <div class="v-btn v-color-btn" data-color="#86efac" style="background: linear-gradient(135deg, #86efac 0%, #4ade80 100%);">🟢</div>
+    <div class="v-btn v-color-btn" data-color="#93c5fd" style="background: linear-gradient(135deg, #93c5fd 0%, #3b82f6 100%);">🔵</div>
+    <div class="v-btn v-color-btn" data-color="#f9a8d4" style="background: linear-gradient(135deg, #f9a8d4 0%, #ec4899 100%);">🔴</div>
+    <div class="v-btn v-color-btn" data-color="#d8b4fe" style="background: linear-gradient(135deg, #d8b4fe 0%, #a855f7 100%);">🟣</div>
   </div>
 
   <!-- Gesture pill (floating indicator) -->

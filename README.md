@@ -85,6 +85,12 @@ Open:
 http://localhost:8000
 ```
 
+PDF viewer route:
+
+```text
+http://localhost:8000/pdfviewer
+```
+
 ### 4. Check that the app is healthy
 
 Open:
@@ -234,26 +240,19 @@ artifacts/trocr_airdraw/best
 
 ## Use The Trained Model In The App
 
-This part is already wired.
+The backend model resolution is already wired.
 
-If this folder exists:
+Priority order used by backend/ocr.py:
 
-```text
-artifacts/trocr_airdraw/best
-```
+1. AIRDRAW_OCR_MODEL environment variable (explicit override)
+2. artifacts/trocr_large_model (if model weights exist)
+3. artifacts/trocr_airdraw/best (if model weights exist)
+4. microsoft/trocr-large-handwritten fallback
 
-the backend will automatically use it.
-
-If it does not exist, the backend falls back to:
-
-```text
-microsoft/trocr-large-handwritten
-```
-
-So the normal flow is:
+Recommended flow:
 1. collect data
 2. train model
-3. save checkpoint into `artifacts/trocr_airdraw/best`
+3. save checkpoint into artifacts/trocr_airdraw/best
 4. restart backend
 5. test in browser
 
@@ -261,10 +260,12 @@ So the normal flow is:
 
 ```bash
 python training/predict_trocr.py \
-  --model-dir artifacts/trocr_airdraw/best \
+  --model-dir artifacts/trocr_large_model \
   --image custom_dataset/images/20260408T043647061329.png \
   --mode sentence
 ```
+
+If you trained your own checkpoint, replace model-dir with artifacts/trocr_airdraw/best.
 
 ## Run With Docker
 
@@ -311,4 +312,40 @@ Then:
 - save samples
 - run `python training/prepare_manifests.py`
 - train with `python training/train_trocr.py ...`
+
+## Troubleshooting
+
+### Port 8000 already in use
+
+If startup fails with "address already in use":
+
+```bash
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+```
+
+Then stop the conflicting process or run on another port:
+
+```bash
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8001
+```
+
+### Push fails with large file or HTTP 500
+
+If push fails while uploading multi-GB data, check if model artifacts were committed.
+The large model folders are intended to stay local and are ignored by .gitignore.
+
+Useful checks:
+
+```bash
+git log --stat origin/main..HEAD
+git ls-files artifacts/trocr_large_model artifacts/trocr_finetuned
+```
+
+If needed, untrack those folders in a new commit while keeping local files:
+
+```bash
+git rm -r --cached artifacts/trocr_large_model artifacts/trocr_finetuned
+git commit -m "stop tracking local model artifacts"
+git push
+```
 

@@ -476,6 +476,102 @@ header {
   transition: width 0.1s;
 }
 
+/* Virtual toolbar separator */
+.v-separator {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
+/* Action buttons (clear search, etc.) */
+.v-action-btn {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.v-action-btn:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+}
+
+.v-action-btn.active {
+  background: rgba(239, 68, 68, 0.4) !important;
+  color: white !important;
+}
+
+/* Zoom buttons (blue theme) */
+.v-zoom-btn {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #93c5fd !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.v-zoom-btn:hover {
+  background: rgba(59, 130, 246, 0.25) !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+}
+
+.v-zoom-btn.active {
+  background: rgba(59, 130, 246, 0.4) !important;
+  color: white !important;
+}
+
+/* Brush size buttons (purple theme) */
+.v-brush-btn {
+  background: rgba(168, 85, 247, 0.15) !important;
+  color: #d8b4fe !important;
+  border-color: rgba(168, 85, 247, 0.3) !important;
+}
+
+.v-brush-btn:hover {
+  background: rgba(168, 85, 247, 0.25) !important;
+  border-color: rgba(168, 85, 247, 0.5) !important;
+}
+
+.v-brush-btn.active {
+  background: rgba(168, 85, 247, 0.4) !important;
+  color: white !important;
+}
+
+/* Color picker buttons */
+.v-color-btn {
+  min-width: 42px;
+  padding: 7px 10px;
+  font-size: 1.1rem;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.v-color-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.v-color-btn:hover::before {
+  opacity: 1;
+}
+
+.v-color-btn.active {
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.4), inset 0 0 20px rgba(255, 255, 255, 0.2);
+  transform: scale(1.15);
+}
+
+.v-color-btn.hover-highlight {
+  transform: scale(1.2);
+  border-color: rgba(255, 255, 255, 0.9) !important;
+}
+
 /* ══════════════════════════════════════════════════════════════
    GESTURE INDICATOR (floating pill — above virtual toolbar)
    ══════════════════════════════════════════════════════════════ */

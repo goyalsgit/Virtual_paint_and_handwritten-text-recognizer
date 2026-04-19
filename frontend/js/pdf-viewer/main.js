@@ -85,8 +85,9 @@ let ocrSocketReady = false;
 let ocrRequestPending = null;
 
 // Tool state
-let activeTool = "cursor"; // cursor | pen | highlighter | search
+let activeTool = "cursor"; // cursor | pen | highlighter | search | eraser
 let activeColor = "#FFD700";
+let eraserRadius = 30; // Eraser radius in pixels
 
 // Annotations storage
 // highlights: { pageNum: [{ x, y, w, h, color, id, timestamp }] }
@@ -508,20 +509,24 @@ function openSearchOverlay() {
 function drawSearchOverlayDot(x, y) {
   searchOverlayCtx.save();
   searchOverlayCtx.beginPath();
-  searchOverlayCtx.fillStyle = "rgba(255, 255, 255, 0.98)";
-  searchOverlayCtx.shadowColor = "rgba(8, 9, 13, 0.78)";
-  searchOverlayCtx.shadowBlur = 4;
-  searchOverlayCtx.arc(x, y, 3.2, 0, Math.PI * 2);
+  // Dark black pen for better visibility
+  searchOverlayCtx.fillStyle = "rgba(0, 0, 0, 0.95)";
+  searchOverlayCtx.shadowColor = "rgba(255, 255, 255, 0.6)";
+  searchOverlayCtx.shadowBlur = 2;
+  searchOverlayCtx.arc(x, y, 4, 0, Math.PI * 2);
   searchOverlayCtx.fill();
   searchOverlayCtx.restore();
 }
 
 function drawSearchOverlaySegment(fromX, fromY, toX, toY) {
   searchOverlayCtx.save();
-  searchOverlayCtx.lineWidth = 5.2;
-  searchOverlayCtx.strokeStyle = "rgba(255, 255, 255, 0.98)";
-  searchOverlayCtx.shadowColor = "rgba(8, 9, 13, 0.8)";
-  searchOverlayCtx.shadowBlur = 3;
+  // Thicker dark black pen for better visibility
+  searchOverlayCtx.lineWidth = 6;
+  searchOverlayCtx.strokeStyle = "rgba(0, 0, 0, 0.95)";
+  searchOverlayCtx.shadowColor = "rgba(255, 255, 255, 0.6)";
+  searchOverlayCtx.shadowBlur = 2;
+  searchOverlayCtx.lineCap = "round";
+  searchOverlayCtx.lineJoin = "round";
   searchOverlayCtx.beginPath();
   searchOverlayCtx.moveTo(fromX, fromY);
   searchOverlayCtx.lineTo(toX, toY);
@@ -1005,6 +1010,7 @@ function addPenPoint(pageNum, normX, normY) {
     currentStroke = {
       points: [],
       color: activeColor,
+      width: currentBrushSize, // ✅ Store brush size with stroke
       pageNum: pageNum,
       id: annotationIdCounter++,
       timestamp: Date.now()
@@ -1035,7 +1041,8 @@ function redrawPenStrokes(pageNum) {
     ctx.beginPath();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.lineWidth = 3;
+    // ✅ Use stroke width if stored, otherwise use default
+    ctx.lineWidth = stroke.width || 3;
     ctx.strokeStyle = stroke.color;
     ctx.globalAlpha = 0.85;
 
@@ -1133,6 +1140,9 @@ function beginVirtualHover(btn) {
       return;
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // HANDLE TOOL SELECTION (Cursor, Pen, Highlighter, Search, Eraser)
+    // ═══════════════════════════════════════════════════════════
     const tool = btn.dataset.tool;
     if (tool) {
       setActiveTool(tool);
@@ -1140,12 +1150,130 @@ function beginVirtualHover(btn) {
         showPill("🔎 Search mode", "#22d3ee");
       } else if (tool === "cursor") {
         showPill("🖱 Cursor mode", "#22d3ee");
+      } else if (tool === "highlighter") {
+        showPill("🟡 Highlighter mode", "#FFD700");
+      } else if (tool === "eraser") {
+        showPill("🧹 Eraser mode", "#ef4444");
       } else {
         showPill(`🎯 ${tool.charAt(0).toUpperCase() + tool.slice(1)} selected`, "#22d3ee");
       }
+      clearVirtualHover();
+      return;
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // HANDLE ACTION BUTTONS (Clear Search, Zoom, Brush Size)
+    // ═══════════════════════════════════════════════════════════
+    const action = btn.dataset.action;
+    
+    // ─── CLEAR SEARCH ───
+    if (action === "clear-search") {
+      if (searchQuery && searchResultsCache.length > 0) {
+        clearSearchResults();
+        showPill("🧹 Search cleared!", "#10b981");
+      } else {
+        showPill("⚠️ No search to clear", "#fbbf24");
+      }
+      clearVirtualHover();
+      return;
+    }
+
+    // ─── ZOOM IN ───
+    if (action === "zoom-in") {
+      // Increase zoom by 20% (0.2)
+      scale = Math.min(MAX_SCALE, scale + 0.2);
+      rerenderAtScale();
+      showPill(`🔍+ Zoomed to ${Math.round(scale * 100)}%`, "#93c5fd");
+      clearVirtualHover();
+      return;
+    }
+
+    // ─── ZOOM OUT ───
+    if (action === "zoom-out") {
+      // Decrease zoom by 20% (0.2)
+      scale = Math.max(MIN_SCALE, scale - 0.2);
+      rerenderAtScale();
+      showPill(`🔍- Zoomed to ${Math.round(scale * 100)}%`, "#93c5fd");
+      clearVirtualHover();
+      return;
+    }
+
+    // ─── BRUSH SIZE INCREASE ───
+    if (action === "brush-increase") {
+      // Increase brush size by 2 pixels
+      // Maximum size is 20 pixels
+      const currentSize = getPenStrokeWidth();
+      const newSize = Math.min(20, currentSize + 2);
+      setPenStrokeWidth(newSize);
+      showPill(`🖌️+ Brush size: ${newSize}px`, "#d8b4fe");
+      clearVirtualHover();
+      return;
+    }
+
+    // ─── BRUSH SIZE DECREASE ───
+    if (action === "brush-decrease") {
+      // Decrease brush size by 2 pixels
+      // Minimum size is 1 pixel
+      const currentSize = getPenStrokeWidth();
+      const newSize = Math.max(1, currentSize - 2);
+      setPenStrokeWidth(newSize);
+      showPill(`🖌️- Brush size: ${newSize}px`, "#d8b4fe");
+      clearVirtualHover();
+      return;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // HANDLE COLOR SELECTION
+    // ═══════════════════════════════════════════════════════════
+    const color = btn.dataset.color;
+    if (color) {
+      activeColor = color;
+      // Update color swatches in sidebar
+      document.querySelectorAll(".swatch").forEach(s => {
+        s.classList.toggle("selected", s.dataset.color === color);
+      });
+      // Update active state on color buttons
+      document.querySelectorAll(".v-color-btn").forEach(c => {
+        c.classList.toggle("active", c.dataset.color === color);
+      });
+      const colorName = getColorName(color);
+      showPill(`🎨 ${colorName} selected`, color);
+      clearVirtualHover();
+      return;
+    }
+
     clearVirtualHover();
   }, HOVER_DURATION);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS FOR BRUSH SIZE
+// ═══════════════════════════════════════════════════════════════
+
+// Global variable to store current brush size
+let currentBrushSize = 3; // Default brush size
+
+// Get current pen stroke width
+function getPenStrokeWidth() {
+  return currentBrushSize;
+}
+
+// Set pen stroke width
+function setPenStrokeWidth(size) {
+  currentBrushSize = size;
+}
+
+// ✅ Helper function to get color name
+function getColorName(hex) {
+  const colorNames = {
+    "#FFD700": "Yellow",
+    "#86efac": "Green",
+    "#93c5fd": "Blue",
+    "#f9a8d4": "Pink",
+    "#d8b4fe": "Purple",
+    "#fca5a5": "Red"
+  };
+  return colorNames[hex] || "Color";
 }
 
 function checkVirtualToolbarHover(sx, sy) {
@@ -1264,7 +1392,8 @@ function handlePoint(lm) {
     const overlayX = overlayFilterX.filter(rawSx, t);
     const overlayY = overlayFilterY.filter(rawSy, t);
     addSearchOverlayPoint(overlayX, overlayY);
-    drawPenCursor(overlayX, overlayY, "#22d3ee");
+    // Dark black cursor to match the pen
+    drawPenCursor(overlayX, overlayY, "#000000");
     showPill("🔎 Writing Search Query", "#22d3ee");
     return;
   }
@@ -1273,6 +1402,36 @@ function handlePoint(lm) {
     if (currentStroke) finishPenStroke();
     drawLaserCursor(sx, sy, "#a78bfa");
     showPill("☝️ Cursor", "#a78bfa");
+    return;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ERASER TOOL: Remove annotations near cursor
+  // ═══════════════════════════════════════════════════════════
+  if (activeTool === "eraser") {
+    if (currentStroke) finishPenStroke();
+    
+    const pageEl = getPageUnderCursor(tip);
+    if (!pageEl) {
+      drawEraserCursor(sx, sy);
+      showPill("🧹 Move onto page to erase", "#ef4444");
+      return;
+    }
+
+    const coords = screenToPage(tip, pageEl);
+    const filteredX = drawFilterX.filter(coords.x, t);
+    const filteredY = drawFilterY.filter(coords.y, t);
+
+    // Calculate screen position for cursor display
+    const rect = pageEl.wrapper.getBoundingClientRect();
+    const screenX = rect.left + filteredX * rect.width;
+    const screenY = rect.top + filteredY * rect.height;
+
+    // Erase annotations near this point
+    eraseNearPoint(pageEl.pageNum, filteredX, filteredY);
+    
+    drawEraserCursor(screenX, screenY);
+    showPill("🧹 Erasing", "#ef4444");
     return;
   }
 
@@ -1388,6 +1547,84 @@ function drawHighlighterCursor(sx, sy, color) {
   cursorCtx.fill();
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ERASER CURSOR AND LOGIC
+// ═══════════════════════════════════════════════════════════════
+function drawEraserCursor(sx, sy) {
+  // Draw a red circle to show eraser area
+  cursorCtx.beginPath();
+  cursorCtx.arc(sx, sy, eraserRadius, 0, Math.PI * 2);
+  cursorCtx.strokeStyle = "rgba(239, 68, 68, 0.8)"; // Red color
+  cursorCtx.lineWidth = 2;
+  cursorCtx.stroke();
+
+  // Fill with semi-transparent red
+  cursorCtx.fillStyle = "rgba(239, 68, 68, 0.15)";
+  cursorCtx.fill();
+
+  // Center dot
+  cursorCtx.beginPath();
+  cursorCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+  cursorCtx.fillStyle = "#ef4444";
+  cursorCtx.fill();
+}
+
+// Erase annotations (pen strokes and highlights) near a point
+function eraseNearPoint(pageNum, normX, normY) {
+  const el = pageElements[pageNum - 1];
+  if (!el) return;
+
+  const W = el.wrapper.getBoundingClientRect().width;
+  const H = el.wrapper.getBoundingClientRect().height;
+  
+  // Convert normalized coordinates to pixel coordinates
+  const px = normX * W;
+  const py = normY * H;
+  
+  let erasedSomething = false;
+
+  // Check and remove pen strokes
+  if (penStrokes[pageNum]) {
+    const before = penStrokes[pageNum].length;
+    penStrokes[pageNum] = penStrokes[pageNum].filter(stroke => {
+      // Check if any point in the stroke is within eraser radius
+      return !stroke.points.some(point => {
+        const pointX = point.x * W;
+        const pointY = point.y * H;
+        const distance = Math.hypot(pointX - px, pointY - py);
+        return distance < eraserRadius;
+      });
+    });
+    if (penStrokes[pageNum].length < before) {
+      erasedSomething = true;
+      redrawPenStrokes(pageNum);
+    }
+  }
+
+  // Check and remove highlights
+  if (highlights[pageNum]) {
+    const before = highlights[pageNum].length;
+    highlights[pageNum] = highlights[pageNum].filter(highlight => {
+      // Check if any point in the highlight is within eraser radius
+      return !highlight.points.some(point => {
+        const pointX = point.x * W;
+        const pointY = point.y * H;
+        const distance = Math.hypot(pointX - px, pointY - py);
+        return distance < eraserRadius;
+      });
+    });
+    if (highlights[pageNum].length < before) {
+      erasedSomething = true;
+      redrawHighlights(pageNum);
+    }
+  }
+
+  // Refresh notes panel if something was erased
+  if (erasedSomething) {
+    refreshNotesPanel();
+  }
+}
+
 function handleFist(lm) {
   if (searchOverlayActive) {
     showPill("🔎 Search pad active", "#22d3ee");
@@ -1430,10 +1667,45 @@ function handleOpen(lm) {
     return;
   }
 
-  // Open hand intentionally performs no action.
   if (currentStroke) finishPenStroke();
   prevWristX = null;
   openStableFrames = 0;
+  
+  // ✅ FIX #1: Add cursor tracking for open hand
+  const tip = lm[8];  // Index finger tip
+  const t = now();
+  const rawSx = (1 - tip.x) * cursorCanvas.width;
+  const rawSy = tip.y * cursorCanvas.height;
+  
+  // Apply filter for smooth movement
+  const sx = ptrFilterX.filter(rawSx, t);
+  const sy = ptrFilterY.filter(rawSy, t);
+  
+  // Clear and draw cursor
+  cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+  drawLaserCursor(sx, sy, "#94a3b8");  // Gray cursor for idle state
+  
+  // ✅ FIX #1b: Reset search state with open hand
+  if (activeTool === "search" && !searchOverlayActive) {
+    setActiveTool("cursor");  // Switch back to cursor mode
+    showPill("✋ Search cleared → Cursor mode", "#22d3ee");
+    return;
+  }
+  
+  // ✅ FIX #1c: Clear search highlights with open hand (hold for 1 second)
+  if (searchQuery && searchResultsCache.length > 0) {
+    openStableFrames++;
+    if (openStableFrames >= 30) {  // ~1 second at 30 FPS
+      clearSearchResults();
+      showPill("✋ Search highlights cleared!", "#10b981");
+      openStableFrames = 0;
+      return;
+    } else {
+      showPill(`✋ Hold to clear search (${Math.ceil((30 - openStableFrames) / 30)}s)`, "#fbbf24");
+      return;
+    }
+  }
+  
   showPill("✋ Open hand idle", "#94a3b8");
 }
 
@@ -1823,6 +2095,8 @@ virtualBtns.forEach(btn => {
         showPill("🔎 Search mode", "#22d3ee");
       } else if (tool === "cursor") {
         showPill("🖱 Cursor mode", "#22d3ee");
+      } else if (tool === "eraser") {
+        showPill("🧹 Eraser mode", "#ef4444");
       } else {
         showPill(`🎯 ${tool.charAt(0).toUpperCase() + tool.slice(1)} selected`, "#22d3ee");
       }
