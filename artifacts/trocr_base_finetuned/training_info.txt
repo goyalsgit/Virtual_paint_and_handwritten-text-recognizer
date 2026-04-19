@@ -1,0 +1,5 @@
+Best Epoch: 1
+Best Val Loss: 0.6410
+Train Loss: 2.9908
+Dataset Size: 216
+Model: microsoft/trocr-base-handwritten
