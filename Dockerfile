@@ -23,9 +23,19 @@ COPY backend/         ./backend/
 COPY frontend/        ./frontend/
 COPY hand_landmarker.task ./hand_landmarker.task
 
-# Optional: copy fine-tuned model if it exists (will silently skip if absent)
-# The backend falls back to microsoft/trocr-large-handwritten automatically.
-COPY artifacts/       ./artifacts/
+# ═══════════════════════════════════════════════════════════════
+# MODEL CONFIGURATION - Choose which model to copy
+# ═══════════════════════════════════════════════════════════════
+
+# Option 1: Copy fine-tuned BASE model (400MB - RECOMMENDED for deployment)
+COPY artifacts/trocr_base_finetuned/ ./artifacts/trocr_base_finetuned/
+
+# Option 2: Copy fine-tuned LARGE model (2.3GB - best accuracy, slow deployment)
+# Uncomment this line and comment out Option 1 to use large model:
+# COPY artifacts/trocr_large_model/ ./artifacts/trocr_large_model/
+
+# Optional: copy training dataset to show your work
+COPY custom_dataset/  ./custom_dataset/
 
 EXPOSE 8000
 

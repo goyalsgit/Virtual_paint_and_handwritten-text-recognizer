@@ -10,9 +10,21 @@ from PIL import Image
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_large_model"
+
+# ═══════════════════════════════════════════════════════════════
+# MODEL CONFIGURATION - Choose which model to use
+# ═══════════════════════════════════════════════════════════════
+
+# Option 1: Your fine-tuned LARGE model (2.3GB - best accuracy, slow deployment)
+# DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_large_model"
+# DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
+
+# Option 2: Fine-tuned BASE model (400MB - good accuracy, fast deployment)
+DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_base_finetuned"
+DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-base-handwritten"
+
+# Fallback if neither exists
 FALLBACK_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
-DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
 OCR_DEBUG_DIR = PROJECT_ROOT / "artifacts" / "ocr_debug"
 
 
