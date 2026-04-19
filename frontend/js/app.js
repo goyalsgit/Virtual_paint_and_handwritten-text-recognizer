@@ -527,13 +527,13 @@ async function triggerOCR() {
   if (state.ocrInFlight || !state.wsReady) {
     if (!state.wsReady) {
       ocrText.textContent = "Not connected to server";
-      ocrBar.style.display = "block";
+      ocrBar.style.display = "flex";
     }
     return;
   }
   if (!canvasHasInk()) {
     ocrText.textContent = "Draw some text first";
-    ocrBar.style.display = "block";
+    ocrBar.style.display = "flex";
     return;
   }
 
@@ -558,11 +558,11 @@ async function triggerOCR() {
     ocrText.textContent = state.inFlightContinuous
       ? (state.continuousTextBuffer + " Recognizing...").trim()
       : "Recognizing...";
-    ocrBar.style.display = "block";
+    ocrBar.style.display = "flex";
   } catch (e) {
     state.ocrInFlight = false;
     ocrText.textContent = `Could not prepare handwriting: ${e.message}`;
-    ocrBar.style.display = "block";
+    ocrBar.style.display = "flex";
   }
 }
 
@@ -573,7 +573,7 @@ async function triggerOCRAll() {
   const b64 = buildOcrImageAll();
   if (!b64) {
     ocrText.textContent = "Nothing written on canvas";
-    ocrBar.style.display = "block";
+    ocrBar.style.display = "flex";
     return;
   }
 
@@ -593,11 +593,11 @@ async function triggerOCRAll() {
       preprocessed: true,
     }));
     ocrText.textContent = "Scanning full canvas...";
-    ocrBar.style.display = "block";
+    ocrBar.style.display = "flex";
   } catch (e) {
     state.ocrInFlight = false;
     ocrText.textContent = `OCR All failed: ${e.message}`;
-    ocrBar.style.display = "block";
+    ocrBar.style.display = "flex";
   }
 }
 
@@ -752,13 +752,13 @@ function connectWS() {
             ? state.continuousTextBuffer + " [Could not recognize]"
             : "Could not recognize — try writing larger";
         }
-        ocrBar.style.display = "block";
+        ocrBar.style.display = "flex";
       }
 
       if (msg.type === "error") {
         state.ocrInFlight = false;
         ocrText.textContent = msg.message || "OCR failed";
-        ocrBar.style.display = "block";
+        ocrBar.style.display = "flex";
       }
     };
   } catch (e) {

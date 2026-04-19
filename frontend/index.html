@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Air Drawing — Hand Gesture Text Recognizer</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=2" />
 </head>
 
 <body>
@@ -83,20 +83,15 @@
   <!-- OCR RESULT BAR — Shows recognized text                      -->
   <!-- ═══════════════════════════════════════════════════════════ -->
   <div id="ocr-bar">
-    <span>RECOGNIZED:</span>
-    <span id="ocr-text"></span>
+    <span>Recognized:</span>
+    <span id="ocr-text">No text recognized yet</span>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- STATUS BAR — Gesture instructions                           -->
   <!-- ═══════════════════════════════════════════════════════════ -->
   <div id="status-bar">
-    INDEX finger = Draw &nbsp;|&nbsp;
-    INDEX + MIDDLE = Lift pen &nbsp;|&nbsp;
-    FIST = Erase &nbsp;|&nbsp;
-    INDEX + MIDDLE + RING = Pan canvas &nbsp;|&nbsp;
-    Hover on left buttons 0.5s = Select color/tool &nbsp;|&nbsp;
-    Auto-OCR after 2.5s pause
+    <strong>INDEX</strong> = Draw • <strong>INDEX + MIDDLE</strong> = Lift Pen • <strong>FIST</strong> = Erase • <strong>3 FINGERS</strong> = Pan Canvas • Hover buttons 0.5s to select • Auto-OCR after 2.5s pause
   </div>
 
   <!-- Load the application (ES module) -->
