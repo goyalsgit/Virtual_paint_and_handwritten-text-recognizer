@@ -134,7 +134,7 @@ def _split_into_lines(img, pad=18):
         return []
 
     merged = []
-    min_gap = max(8, pad // 2)
+    min_gap = max(20, pad)  # ✅ IMPROVED: Larger gap for better word separation (was max(8, pad // 2))
     for start_y, end_y in ranges:
         if not merged or start_y - merged[-1][1] > min_gap:
             merged.append([start_y, end_y])
@@ -220,9 +220,14 @@ def _prepare_trocr_image(
     ink_mask = gray < 200
     ink_ratio = np.count_nonzero(ink_mask) / max(1, gray.size)
     if ink_ratio > 0.001:  # only if there's actual ink
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        # ✅ IMPROVED: Enhanced preprocessing for better OCR accuracy
+        # Step 1: Enhance contrast (makes ink darker, background whiter)
+        gray = cv2.convertScaleAbs(gray, alpha=1.2, beta=10)
+        
+        # Step 2: Thicken strokes with larger kernel and more iterations
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))  # Larger kernel (was 3x3)
         inverted = cv2.bitwise_not(gray)
-        dilated = cv2.dilate(inverted, kernel, iterations=1)
+        dilated = cv2.dilate(inverted, kernel, iterations=2)  # More iterations (was 1)
         gray = cv2.bitwise_not(dilated)
 
     rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)

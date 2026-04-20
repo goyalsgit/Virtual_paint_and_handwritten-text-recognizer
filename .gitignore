@@ -4,6 +4,9 @@ __pycache__/
 .DS_Store
 drawing.png
 
+# All extra documentation/notes (not needed in repo)
+notes/
+
 # OCR debug images (auto-generated, can be large)
 artifacts/ocr_debug/
 

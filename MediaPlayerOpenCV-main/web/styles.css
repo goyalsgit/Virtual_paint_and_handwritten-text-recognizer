@@ -1,0 +1,633 @@
+:root {
+  --bg: #07111f;
+  --line: rgba(151, 173, 200, 0.18);
+  --text: #eff6ff;
+  --muted: #98a8bc;
+  --accent: #ff7a18;
+  --accent-soft: #ffb347;
+  --cyan: #64d9ff;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: "Space Grotesk", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(255,122,24,0.18), transparent 30%),
+    radial-gradient(circle at 85% 10%, rgba(100,217,255,0.14), transparent 25%),
+    linear-gradient(140deg, #040b14 0%, #081321 50%, #050b15 100%);
+}
+
+/* ── App shell ── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  padding: 10px;
+  gap: 10px;
+}
+
+/* ── Glass ── */
+.glass {
+  backdrop-filter: blur(18px);
+  background: linear-gradient(160deg, rgba(13,24,40,0.82), rgba(8,16,28,0.88));
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: 16px;
+}
+
+/* ── Top bar ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  flex-shrink: 0;
+  border-radius: 14px;
+}
+
+.topbar-title {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+  color: var(--accent-soft);
+}
+
+.topbar-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar-source input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(3,10,18,0.72);
+  color: var(--text);
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.topbar-source input::placeholder { color: var(--muted); }
+
+/* ── Buttons ── */
+.primary-button,
+.secondary-button,
+.controls button {
+  appearance: none;
+  border: 0;
+  border-radius: 12px;
+  padding: 20px 32px;
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.primary-button, .upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent), #ff9548);
+  color: #08111c;
+}
+
+.secondary-button, .controls button {
+  background: rgba(255,255,255,0.07);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.controls button.accent {
+  background: linear-gradient(135deg, rgba(100,217,255,0.9), rgba(156,255,90,0.9));
+  color: #021018;
+  border: 0;
+}
+
+.primary-button:hover, .secondary-button:hover,
+.controls button:hover, .upload-button:hover {
+  transform: translateY(-1px);
+}
+
+/* ── Main grid ── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Player column ── */
+.player-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Drop zone wraps the video stage */
+.drop-zone {
+  flex: 1;
+  min-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px dashed rgba(255,255,255,0.1);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.drop-zone.dragover {
+  border-color: var(--cyan);
+  background: rgba(100,217,255,0.06);
+}
+
+/* ── Video stage ── */
+.video-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: #01060d;
+  overflow: hidden;
+}
+
+#mediaPlayer {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  background: #000;
+  min-height: 0;
+}
+
+#mediaPlayer.hidden,
+.youtube-player-wrap.hidden { display: none; }
+
+.youtube-player-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+.youtube-player-wrap iframe,
+#youtubePlayer {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}
+
+/* Empty state */
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(5,12,20,0.7);
+}
+
+.empty-state.hidden { display: none; }
+
+.empty-card { text-align: center; }
+
+.empty-label {
+  color: var(--cyan);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.empty-card p { color: var(--muted); font-size: 0.9rem; }
+
+/* Floating meta chips */
+.floating-meta {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(5,12,20,0.8);
+  border: 1px solid rgba(255,255,255,0.1);
+  font-size: 0.78rem;
+}
+
+.meta-chip span { color: var(--muted); display: block; }
+.meta-chip strong { display: block; margin-top: 2px; }
+
+/* Hide the regular timeline/controls when in fullscreen */
+#videoStage:fullscreen ~ .timeline-row,
+#videoStage:fullscreen ~ .controls,
+#videoStage:fullscreen ~ .file-strip,
+#videoStage:-webkit-full-screen ~ .timeline-row,
+#videoStage:-webkit-full-screen ~ .controls,
+#videoStage:-webkit-full-screen ~ .file-strip,
+body.stage-focus-mode .timeline-row,
+body.stage-focus-mode .controls,
+body.stage-focus-mode .file-strip {
+  display: none;
+}
+.fs-exit-btn {
+  display: none;
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(10,20,35,0.85);
+  color: #fff;
+  font: 700 0.85rem "Space Grotesk", sans-serif;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.fs-exit-btn.fs-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Show in both native and CSS fullscreen */
+#videoStage:fullscreen .fs-exit-btn,
+#videoStage:-webkit-full-screen .fs-exit-btn,
+body.stage-focus-mode #videoStage .fs-exit-btn {
+  display: block;
+}
+
+.fs-exit-btn:hover {
+  background: rgba(255,122,24,0.85);
+  border-color: var(--accent);
+}
+
+/* Fullscreen timeline bar — hidden by default, shown only in fullscreen */
+.fullscreen-bar {
+  display: none;
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 2;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 14px;
+  background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+}
+
+.fullscreen-bar span {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85rem;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.fullscreen-bar input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Native fullscreen */
+#videoStage:fullscreen,
+#videoStage:-webkit-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border-radius: 0;
+}
+
+#videoStage:fullscreen #mediaPlayer,
+#videoStage:-webkit-full-screen #mediaPlayer {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+
+#videoStage:fullscreen .youtube-player-wrap,
+#videoStage:-webkit-full-screen .youtube-player-wrap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+#videoStage:fullscreen .youtube-player-wrap iframe,
+#videoStage:fullscreen #youtubePlayer,
+#videoStage:-webkit-full-screen .youtube-player-wrap iframe,
+#videoStage:-webkit-full-screen #youtubePlayer {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+#videoStage:fullscreen .fullscreen-bar,
+#videoStage:-webkit-full-screen .fullscreen-bar,
+body.stage-focus-mode #videoStage .fullscreen-bar { display: flex; }
+
+#videoStage:fullscreen .floating-meta,
+#videoStage:-webkit-full-screen .floating-meta,
+body.stage-focus-mode .floating-meta { bottom: 64px; }
+
+#videoStage:fullscreen .empty-state,
+#videoStage:-webkit-full-screen .empty-state { position: absolute; inset: 0; }
+
+/* CSS fullscreen fallback */
+body.stage-focus-mode {
+  overflow: hidden;
+}
+
+/* videoStage is moved to <body> by JS — these styles apply to it there */
+body.stage-focus-mode > #videoStage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+/* Hide everything else in the body when in focus mode */
+body.stage-focus-mode > *:not(#videoStage):not(#toastHost):not(#gestureCursor) {
+  visibility: hidden;
+}
+
+body.stage-focus-mode #mediaPlayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  background: #000;
+  display: block;
+}
+
+body.stage-focus-mode .youtube-player-wrap {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+body.stage-focus-mode .youtube-player-wrap iframe,
+body.stage-focus-mode #youtubePlayer {
+  width: 100%; height: 100%; min-height: 0;
+}
+
+body.stage-focus-mode .empty-state { position: absolute; inset: 0; }
+
+/* ── Timeline row ── */
+.timeline-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mono { font-family: "IBM Plex Mono", monospace; font-size: 0.82rem; }
+
+#seekBar { width: 100%; accent-color: var(--accent); }
+
+/* ── Controls ── */
+.controls {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── File strip ── */
+.file-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+
+.file-strip strong { color: var(--text); font-size: 0.82rem; }
+
+/* ── Side column ── */
+.side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Webcam card ── */
+.webcam-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.side-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.status-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.status-pill.offline { background: rgba(255,107,107,0.13); color: #ffb7b7; }
+.status-pill.online  { background: rgba(156,255,90,0.12);  color: #cbffad; }
+
+.camera-stage {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  aspect-ratio: 16/9;
+  background: #01060d;
+  border: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+
+#webcamInput { display: none; }
+
+#webcamCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #020913;
+}
+
+.gesture-status {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.gs-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  font-size: 0.8rem;
+}
+
+.gs-item span { color: var(--muted); display: block; margin-bottom: 2px; }
+.gs-item strong { display: block; }
+
+/* ── Legend card ── */
+.legend-card {
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+
+.legend-title {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--accent-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.legend {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legend li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+
+.legend span { color: var(--muted); }
+.legend strong { color: var(--text); }
+
+/* ── Gesture cursor ── */
+#gestureCursor {
+  position: fixed;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99999;
+  transform: translate(-50%, -50%);
+  will-change: left, top;
+  display: block;
+  transition: background 100ms ease, box-shadow 100ms ease,
+              width 100ms ease, height 100ms ease, transform 100ms ease;
+}
+
+#gestureCursor.mode-idle {
+  background: rgba(255,255,255,0.2);
+  border: 2px solid rgba(255,255,255,0.4);
+  width: 16px; height: 16px;
+}
+
+#gestureCursor.mode-pointer {
+  background: rgba(100,217,255,0.85);
+  border: 2px solid #fff;
+  box-shadow: 0 0 14px rgba(100,217,255,0.8);
+  width: 28px; height: 28px;
+}
+
+#gestureCursor.mode-scroll {
+  background: rgba(156,255,90,0.85);
+  border: 2px solid #fff;
+  box-shadow: 0 0 14px rgba(156,255,90,0.8);
+  width: 36px; height: 36px;
+}
+
+#gestureCursor.mode-click {
+  background: rgba(255,122,24,0.95);
+  border: 2px solid #fff;
+  box-shadow: 0 0 20px rgba(255,122,24,0.9);
+  transform: translate(-50%, -50%) scale(1.4);
+  width: 28px; height: 28px;
+}
+
+/* ── Toast ── */
+.toast-host {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 8px;
+  z-index: 9998;
+}
+
+.toast {
+  min-width: 200px;
+  max-width: 280px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(4,10,18,0.92);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: var(--shadow);
+  font-size: 0.88rem;
+  animation: toast-in 180ms ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
