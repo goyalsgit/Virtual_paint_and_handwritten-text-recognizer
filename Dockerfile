@@ -36,7 +36,7 @@ COPY artifacts/trocr_large_model/ ./artifacts/trocr_large_model/
 # Optional: copy training dataset to show your work
 COPY custom_dataset/  ./custom_dataset/
 
-EXPOSE 8000
+EXPOSE 7860
 
 # Run from /app so relative paths (frontend/, hand_landmarker.task) resolve correctly
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
