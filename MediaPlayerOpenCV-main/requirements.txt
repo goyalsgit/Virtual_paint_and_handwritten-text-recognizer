@@ -1,3 +1,0 @@
-# No external Python packages are required.
-# Start with:
-# python app.py

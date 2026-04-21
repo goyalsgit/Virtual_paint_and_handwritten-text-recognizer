@@ -1,6 +1,0 @@
-.venv/
-.packages/
-.tmp/
-__pycache__/
-gesture_media_player/__pycache__/
-*.pyc
