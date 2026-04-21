@@ -19,3 +19,7 @@ artifacts/trocr_airdraw_test/
 artifacts/trocr_airdraw_test_local/
 artifacts/trocr_large_model/
 artifacts/trocr_finetuned/
+artifacts/trocr_base_finetuned/
+
+# Large WASM files - will be included in Docker build but not in git
+frontend/vendor/mediapipe/wasm/*.wasm
