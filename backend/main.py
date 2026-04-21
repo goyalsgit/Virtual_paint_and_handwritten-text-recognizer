@@ -149,6 +149,13 @@ async def root():
         return FileResponse(index_path)
     return {"status": "Air Drawing OCR Server running"}
 
+@app.get("/mediaplayer")
+async def mediaplayer():
+    player_path = FRONTEND_DIR / "media-player.html"
+    if player_path.exists():
+        return FileResponse(player_path)
+    return {"error": "Media Player not found"}
+
 @app.get("/pdfviewer")
 async def pdfviewer():
     viewer_path = FRONTEND_DIR / "pdf-viewer.html"

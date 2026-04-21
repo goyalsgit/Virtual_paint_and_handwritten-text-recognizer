@@ -24,17 +24,15 @@ COPY frontend/        ./frontend/
 COPY hand_landmarker.task ./hand_landmarker.task
 
 # ═══════════════════════════════════════════════════════════════
-# MODEL CONFIGURATION - Choose which model to copy
+# MODEL CONFIGURATION - Download model on startup instead of copying
+# This avoids Git LFS issues and makes deployment faster
 # ═══════════════════════════════════════════════════════════════
 
-# Option 1: Copy fine-tuned BASE model (1.2GB - not trained properly yet)
-# COPY artifacts/trocr_base_finetuned/ ./artifacts/trocr_base_finetuned/
+# Create directories for model (will be downloaded on first run)
+RUN mkdir -p ./artifacts/trocr_large_model ./custom_dataset
 
-# Option 2: Copy fine-tuned LARGE model (2.3GB - best accuracy, working perfectly)
-COPY artifacts/trocr_large_model/ ./artifacts/trocr_large_model/
-
-# Optional: copy training dataset to show your work
-COPY custom_dataset/  ./custom_dataset/
+# Note: Model will be auto-downloaded from Hugging Face Hub on first startup
+# This is faster and avoids large file upload issues
 
 EXPOSE 7860
 
