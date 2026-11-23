@@ -6,12 +6,12 @@ export const SEARCH_OVERLAY_MAX_SEGMENT_PX = 5.0;
 export const SEARCH_OVERLAY_IDLE_SEC = 2.2;
 
 export const OCR_WS_URL = (() => {
-  if (typeof window === "undefined" || !window.location) {
+  const host = window.location.hostname;
+  if (!host || host === "localhost" || host === "127.0.0.1") {
     return "ws://localhost:8000/ws";
   }
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host = window.location.host || "localhost:8000";
-  return `${protocol}//${host}/ws`;
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${protocol}://${host}/ws`;
 })();
 
 export const HOVER_DURATION = 220;

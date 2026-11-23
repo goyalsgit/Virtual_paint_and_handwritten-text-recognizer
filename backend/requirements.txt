@@ -6,3 +6,4 @@ opencv-python-headless==4.9.0.80
 numpy>=1.26.4
 torch>=2.2,<3
 transformers>=4.39
+pyspellchecker==0.9.1

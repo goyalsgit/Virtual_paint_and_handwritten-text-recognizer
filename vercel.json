@@ -1,0 +1,21 @@
+{
+  "buildCommand": "echo 'Frontend only - no build needed'",
+  "outputDirectory": "frontend",
+  "env": {
+    "BACKEND_URL": "@backend_url"
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "${BACKEND_URL}/api/:path*"
+    },
+    {
+      "source": "/ws",
+      "destination": "${BACKEND_URL}/ws"
+    },
+    {
+      "source": "/health",
+      "destination": "${BACKEND_URL}/health"
+    }
+  ]
+}

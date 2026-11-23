@@ -1,3 +1,5 @@
+import { PointFilter } from "./pointer-filter.js";
+
 const elements = {
   appShell: document.getElementById("appShell"),
   videoStage: document.getElementById("videoStage"),
@@ -110,30 +112,12 @@ function setGestureDisplay(name, commandLabel = "None") {
   elements.detectedCommand.textContent = commandLabel;
 }
 
-// Reference to the drop-zone so we can put videoStage back on exit
-let _videoStageOriginalParent = null;
-
 function setStageFocusMode(enabled) {
   state.stageFocusMode = enabled;
   document.body.classList.toggle("stage-focus-mode", enabled);
   // Lock/unlock scroll on both html and body so no scrollable area exists in fullscreen
   document.documentElement.style.overflow = enabled ? "hidden" : "";
   document.body.style.overflow = enabled ? "hidden" : "";
-
-  const videoStage = elements.videoStage;
-
-  if (enabled) {
-    // Move videoStage out of its clipping ancestors (drop-zone → player-col → glass)
-    // directly onto <body> so position:fixed works from the true viewport
-    _videoStageOriginalParent = videoStage.parentElement;
-    document.body.appendChild(videoStage);
-  } else {
-    // Put it back where it was
-    if (_videoStageOriginalParent && videoStage.parentElement === document.body) {
-      _videoStageOriginalParent.appendChild(videoStage);
-    }
-    _videoStageOriginalParent = null;
-  }
 }
 
 function requireMedia() {
@@ -900,7 +884,7 @@ function clearCanvasPlaceholder() {
 }
 
 // ---------------------------------------------------------------------------
-// Gesture cursor — smooth lerp, always visible, hidden in fullscreen
+// Gesture cursor — filtered hand movement, always visible, hidden in fullscreen
 // ---------------------------------------------------------------------------
 
 const _cursor = {
@@ -908,37 +892,21 @@ const _cursor = {
   targetY: window.innerHeight / 2,
   renderedX: window.innerWidth / 2,
   renderedY: window.innerHeight / 2,
-  smoothRawX: 0.5,
-  smoothRawY: 0.5,
-  bufX: Array(6).fill(0.5),
-  bufY: Array(6).fill(0.5),
-  bufIdx: 0,
   lastMoveAt: 0,
+  clickPoseFrames: 0,
+  clickReleaseFrames: 0,
+  clickPoseActive: false,
+  movingPoseHistory: [],
 };
+const _mediaPointerFilter = new PointFilter();
 
 const FS_EXIT_HIDE_MS = 3000; // hide exit button after 3s of no movement
 
-// Rendered cursor chases target — lower = smoother/slower
-const CURSOR_LERP = 0.25;
-// Raw landmark EMA smoothing — lower = smoother/slower
-const RAW_SMOOTH = 0.4;
-// Buffer size for rolling average
-const BUF_SIZE = 6;
-
-// Map hand position from a central zone to full screen
-// Wider zone = less sensitive, less edge jitter
-const ZONE_MIN_X = 0.15;
-const ZONE_MAX_X = 0.85;
-const ZONE_MIN_Y = 0.10;
-const ZONE_MAX_Y = 0.85;
-
-function _mapToScreen(raw, zMin, zMax) {
-  return Math.max(0, Math.min(1, (raw - zMin) / (zMax - zMin)));
-}
+// The shared One Euro filter matches the drawing pointer without extra lag.
 
 function _cursorRafLoop() {
-  _cursor.renderedX += (_cursor.targetX - _cursor.renderedX) * CURSOR_LERP;
-  _cursor.renderedY += (_cursor.targetY - _cursor.renderedY) * CURSOR_LERP;
+  _cursor.renderedX = _cursor.targetX;
+  _cursor.renderedY = _cursor.targetY;
 
   const cursor = elements.gestureCursor;
   const inFullscreen = state.stageFocusMode
@@ -958,17 +926,12 @@ function _cursorRafLoop() {
   requestAnimationFrame(_cursorRafLoop);
 }
 
-// Last known smoothed hand position — used for delta movement
-const _handPrev = { x: null, y: null, warmup: 0 };
-
-// How many frames to skip after hand enters before applying delta (buffer warmup)
-const CURSOR_WARMUP_FRAMES = 8;
-
-// Sensitivity multiplier: how many pixels the cursor moves per unit of hand movement
-const CURSOR_SENSITIVITY = 2.5;
-
-// Cursor positioning mode: "delta" for relative movement, "absolute" for direct mapping
-const CURSOR_MODE = "absolute"; // Change to "delta" for relative movement
+// Relative tracking keeps the cursor where it was when hand tracking starts
+// or resumes, then translates filtered hand motion into screen movement.
+const _handPrev = { x: null, y: null };
+const CURSOR_SENSITIVITY = 3.0;
+const CURSOR_MOVEMENT_DEADZONE_PX = 0.6;
+const CURSOR_EDGE_MARGIN_PX = 14;
 
 function updateGestureCursor(landmarks, handedness) {
   const index    = isFingerExtended(landmarks, 8, 6);
@@ -977,64 +940,40 @@ function updateGestureCursor(landmarks, handedness) {
   const pinky    = isFingerExtended(landmarks, 20, 18);
   const thumbOut = isThumbExtended(landmarks, handedness);
 
-  // Flip X because canvas is mirrored
-  const rawX = 1 - landmarks[8].x;
-  const rawY = landmarks[8].y;
-
-  // On first frame after hand enters, reset all smoothing buffers to current position
-  if (_handPrev.x === null) {
-    _cursor.smoothRawX = rawX;
-    _cursor.smoothRawY = rawY;
-    _cursor.bufX.fill(rawX);
-    _cursor.bufY.fill(rawY);
-    _handPrev.warmup = 0;
-  }
-
-  // Step 1: EMA smoothing
-  _cursor.smoothRawX += (rawX - _cursor.smoothRawX) * RAW_SMOOTH;
-  _cursor.smoothRawY += (rawY - _cursor.smoothRawY) * RAW_SMOOTH;
-
-  // Step 2: rolling average
-  _cursor.bufX[_cursor.bufIdx] = _cursor.smoothRawX;
-  _cursor.bufY[_cursor.bufIdx] = _cursor.smoothRawY;
-  _cursor.bufIdx = (_cursor.bufIdx + 1) % BUF_SIZE;
-  const avgX = _cursor.bufX.reduce((a, b) => a + b, 0) / BUF_SIZE;
-  const avgY = _cursor.bufY.reduce((a, b) => a + b, 0) / BUF_SIZE;
-
-  // Step 3: delta movement — only move cursor when in pointer or click pose
-  const isMovingPose = (index && !middle && !ring && !pinky && !thumbOut) ||
-                       (index && middle && !ring && !pinky && !thumbOut);
+  // Use the drawing pointer's adaptive filter, but apply filtered motion as a
+  // relative delta so camera re-entry never snaps to a hand-mapped position.
+  const rawMovingPose = (index && !middle && !ring && !pinky && !thumbOut) ||
+                        (index && middle && !ring && !pinky && !thumbOut);
+  _cursor.movingPoseHistory.push(rawMovingPose);
+  if (_cursor.movingPoseHistory.length > 3) _cursor.movingPoseHistory.shift();
+  const isMovingPose = _cursor.movingPoseHistory.filter(Boolean).length >= 2;
 
   if (isMovingPose) {
-    _handPrev.warmup++;
-    
-    if (CURSOR_MODE === "absolute") {
-      // Absolute positioning: map finger position directly to screen
-      _cursor.targetX = avgX * window.innerWidth;
-      _cursor.targetY = avgY * window.innerHeight;
-      _cursor.lastMoveAt = performance.now();
-      _handPrev.x = avgX;
-      _handPrev.y = avgY;
+    const now = performance.now();
+    const rawX = (1 - landmarks[8].x) * window.innerWidth;
+    const rawY = landmarks[8].y * window.innerHeight;
+    if (_handPrev.x === null) {
+      _mediaPointerFilter.reset();
+      const [seedX, seedY] = _mediaPointerFilter.filter(rawX, rawY, now);
+      _handPrev.x = seedX;
+      _handPrev.y = seedY;
     } else {
-      // Delta positioning: move cursor relative to previous position
-      if (_handPrev.x !== null && _handPrev.warmup > CURSOR_WARMUP_FRAMES) {
-        const dx = (avgX - _handPrev.x) * window.innerWidth  * CURSOR_SENSITIVITY;
-        const dy = (avgY - _handPrev.y) * window.innerHeight * CURSOR_SENSITIVITY;
-
-        if (Math.abs(dx) > 0.3 || Math.abs(dy) > 0.3) {
-          _cursor.targetX = Math.max(0, Math.min(window.innerWidth,  _cursor.targetX + dx));
-          _cursor.targetY = Math.max(0, Math.min(window.innerHeight, _cursor.targetY + dy));
-          _cursor.lastMoveAt = performance.now();
-        }
+      const [filteredX, filteredY] = _mediaPointerFilter.filter(rawX, rawY, now);
+      const dx = filteredX - _handPrev.x;
+      const dy = filteredY - _handPrev.y;
+      if (Math.abs(dx) > CURSOR_MOVEMENT_DEADZONE_PX || Math.abs(dy) > CURSOR_MOVEMENT_DEADZONE_PX) {
+        _cursor.targetX = Math.max(CURSOR_EDGE_MARGIN_PX, Math.min(window.innerWidth - CURSOR_EDGE_MARGIN_PX, _cursor.targetX + dx * CURSOR_SENSITIVITY));
+        _cursor.targetY = Math.max(CURSOR_EDGE_MARGIN_PX, Math.min(window.innerHeight - CURSOR_EDGE_MARGIN_PX, _cursor.targetY + dy * CURSOR_SENSITIVITY));
+        _cursor.lastMoveAt = now;
       }
-      _handPrev.x = avgX;
-      _handPrev.y = avgY;
+      _handPrev.x = filteredX;
+      _handPrev.y = filteredY;
     }
   } else {
-    // Any other gesture — freeze cursor, reset prev so re-entry doesn't jump
+    // Freeze the cursor and reseed the filter when the movement pose returns.
     _handPrev.x = null;
     _handPrev.y = null;
-    _handPrev.warmup = 0;
+    _mediaPointerFilter.reset();
   }
 
   const cursor = elements.gestureCursor;
@@ -1048,20 +987,39 @@ function updateGestureCursor(landmarks, handedness) {
 
   if (isClickPose) {
     cursor.className = "mode-click";
-    if (!state.clickCooldown) {
+    _cursor.clickPoseFrames++;
+    _cursor.clickReleaseFrames = 0;
+    if (_cursor.clickPoseFrames >= 3 && !_cursor.clickPoseActive && !state.clickCooldown) {
+      _cursor.clickPoseActive = true;
       state.clickCooldown = true;
-      const el = document.elementFromPoint(_cursor.renderedX, _cursor.renderedY);
-      if (el && el !== cursor) {
-        el.dispatchEvent(new MouseEvent("click", {
-          bubbles: true, cancelable: true, view: window,
-          clientX: _cursor.renderedX, clientY: _cursor.renderedY,
-        }));
+      const target = document.elementFromPoint(_cursor.renderedX, _cursor.renderedY);
+      if (target && target !== cursor) {
+        if (target.matches?.('input[type="range"]')) {
+          const rect = target.getBoundingClientRect();
+          const ratio = Math.max(0, Math.min(1, (_cursor.renderedX - rect.left) / rect.width));
+          target.value = String(Number(target.min || 0) + ratio * (Number(target.max || 100) - Number(target.min || 0)));
+          target.dispatchEvent(new Event("input", { bubbles: true }));
+          target.dispatchEvent(new Event("change", { bubbles: true }));
+        } else {
+          target.click();
+        }
       }
-      setTimeout(() => { state.clickCooldown = false; }, 1500);
+      setTimeout(() => { state.clickCooldown = false; }, 500);
     }
   } else if (isPointerPose) {
+    _cursor.clickPoseFrames = 0;
+    if (_cursor.clickPoseActive) {
+      _cursor.clickReleaseFrames++;
+      if (_cursor.clickReleaseFrames >= 3) {
+        _cursor.clickPoseActive = false;
+        _cursor.clickReleaseFrames = 0;
+      }
+    }
     cursor.className = "mode-pointer";
   } else {
+    _cursor.clickPoseFrames = 0;
+    _cursor.clickPoseActive = false;
+    _cursor.clickReleaseFrames = 0;
     cursor.className = "mode-idle";
   }
   state.lastScrollY = null;
@@ -1118,7 +1076,8 @@ async function onResults(results) {
     hideGestureCursor();
     _handPrev.x = null;
     _handPrev.y = null;
-    _handPrev.warmup = 0;
+    _mediaPointerFilter.reset();
+    _cursor.movingPoseHistory = [];
     if (performance.now() - state.lastSeenHandAt > 800) {
       setGestureDisplay("No hand", "None");
     }

@@ -368,8 +368,57 @@ body.stage-focus-mode {
   overflow: hidden;
 }
 
-/* videoStage is moved to <body> by JS — these styles apply to it there */
-body.stage-focus-mode > #videoStage {
+/* Keep videoStage mounted in place and expand it over the viewport. */
+body.stage-focus-mode #appShell {
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  gap: 0;
+  overflow: visible;
+}
+
+body.stage-focus-mode #appShell > .topbar,
+body.stage-focus-mode .side-col,
+body.stage-focus-mode .timeline-row,
+body.stage-focus-mode .controls,
+body.stage-focus-mode .file-strip {
+  display: none !important;
+}
+
+body.stage-focus-mode .main-grid {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+body.stage-focus-mode .player-col {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  padding: 0;
+  overflow: visible;
+  position: static;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+body.stage-focus-mode #dropZone {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: static;
+  flex: none;
+  overflow: visible;
+  border: 0;
+}
+
+body.stage-focus-mode #videoStage {
   position: fixed;
   top: 0;
   left: 0;
@@ -382,11 +431,6 @@ body.stage-focus-mode > #videoStage {
   justify-content: center;
   border-radius: 0;
   overflow: hidden;
-}
-
-/* Hide everything else in the body when in focus mode */
-body.stage-focus-mode > *:not(#videoStage):not(#toastHost):not(#gestureCursor) {
-  visibility: hidden;
 }
 
 body.stage-focus-mode #mediaPlayer {

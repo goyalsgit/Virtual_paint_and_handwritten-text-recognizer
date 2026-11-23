@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/media-player.css">
+  <link rel="stylesheet" href="/static/css/media-player.css?v=2">
 </head>
 <body>
   <div id="appShell" class="app-shell">
@@ -124,6 +124,8 @@
         <div class="legend-card glass">
           <p class="legend-title">Gesture Map</p>
           <ul class="legend">
+            <li><span>Index Finger Up</span><strong>Move pointer</strong></li>
+            <li><span>Touch Index + Middle</span><strong>Click target</strong></li>
             <li><span>OK Sign</span><strong>Play / Pause</strong></li>
             <li><span>Three Fingers Up</span><strong>Fullscreen</strong></li>
             <li><span>Thumb Up (hold)</span><strong>Volume Up</strong></li>
@@ -145,6 +147,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
-  <script src="/static/js/media-player.js" defer></script>
+  <script type="module" src="/static/js/media-player.js?v=8"></script>
 </body>
 </html>

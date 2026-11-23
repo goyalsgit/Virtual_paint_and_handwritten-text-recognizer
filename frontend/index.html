@@ -5,74 +5,96 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Air Drawing — Hand Gesture Text Recognizer</title>
-  <link rel="stylesheet" href="/static/styles.css?v=2" />
+  <link rel="stylesheet" href="/static/styles.css?v=25" />
 </head>
 
 <body>
-
-  <!-- Loading overlay (shown while camera + MediaPipe loads) -->
   <div id="loading">
     <div class="spinner"></div>
     <h2>Loading hand tracking...</h2>
-    <p style="color:#555;font-size:13px">Allow camera access when prompted</p>
+    <p>Allow camera access when prompted</p>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════════ -->
-  <!-- TOOLBAR — Colors, tools, OCR controls                      -->
-  <!-- ═══════════════════════════════════════════════════════════ -->
-  <div id="toolbar">
-    <!-- Color buttons (built dynamically by JS) -->
-    <div id="color-btns"></div>
-
-    <!-- Divider -->
-    <div style="width:1px;height:28px;background:#333;margin:0 4px"></div>
-
-    <!-- Tool buttons -->
-    <button class="tool-btn" id="btn-erase">Eraser</button>
-    <button class="tool-btn" id="btn-undo">Undo</button>
-    <button class="tool-btn" id="btn-redo">Redo</button>
-    <button class="tool-btn danger" id="btn-clear">Clear</button>
-
-    <!-- Brush size slider -->
-    <div class="brush-control">
-      <span>Brush</span>
-      <input type="range" id="brush-range" min="2" max="28" value="10" />
-      <span id="brush-val">10px</span>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="Air Drawing home">
+      <span class="brand-mark">✦</span>
+      <span><strong>Air Canvas</strong><small>Hand gesture drawing studio</small></span>
+    </a>
+    <div class="header-palette" aria-label="Drawing colors">
+      <span class="palette-label">COLOR</span>
+      <div id="color-btns" aria-label="Ink colors"></div>
     </div>
+    <nav class="app-nav" aria-label="Workspace tools">
+      <a class="nav-link active" href="/">✎ <span>Air Drawing</span></a>
+      <button class="tool-btn accent-btn nav-action" id="btn-ocr" title="Recognize the current drawing">✦ <span>Run OCR</span></button>
+      <button class="tool-btn nav-action" id="btn-focus" title="Toggle whiteboard focus mode">◎ <span>Focus Board</span></button>
+      <button class="tool-btn download-btn nav-action" id="btn-download" title="Download the drawing">↓ <span>Download</span></button>
+      <a class="nav-link" id="btn-media-player" href="/mediaplayer">▶ <span>Media Player</span></a>
+      <a class="nav-link" id="btn-pdf-viewer" href="/pdfviewer">▤ <span>PDF Viewer</span></a>
+    </nav>
+  </header>
 
-    <!-- OCR mode selector -->
-    <select class="ocr-select" id="ocr-mode">
-      <option value="sentence">OCR: Sentence</option>
-      <option value="continuous">OCR: Continuous Append</option>
-      <option value="line">OCR: Line</option>
-      <option value="word">OCR: Word</option>
-    </select>
+  <main class="workspace">
+    <section id="toolbar" aria-label="Drawing controls">
+      <div class="control-row primary-controls">
+        <div class="control-group tools-group">
+          <span class="group-label">TOOLS</span>
+          <div class="button-set">
+            <button class="tool-btn" id="btn-erase">◩ <span>Eraser</span></button>
+            <button class="tool-btn" id="btn-undo">↶ <span>Undo</span></button>
+            <button class="tool-btn" id="btn-redo">↷ <span>Redo</span></button>
+            <button class="tool-btn danger" id="btn-clear">⌫ <span>Clear</span></button>
+          </div>
+        </div>
+        <div class="control-group brush-group">
+          <label class="group-label" for="brush-range">BRUSH SIZE</label>
+          <div class="brush-control">
+            <span>Fine</span>
+            <input type="range" id="brush-range" min="2" max="28" value="10" />
+            <span>Bold</span>
+            <output id="brush-val">10px</output>
+          </div>
+        </div>
+        <div class="mode-wrap">
+          <span class="group-label">MODE</span>
+          <div id="mode-label">◌ READY</div>
+        </div>
+      </div>
 
-    <!-- OCR trigger buttons -->
-    <button class="tool-btn" id="btn-ocr" style="border-color:#336">Run OCR</button>
-    <button class="tool-btn" id="btn-ocr-all" style="border-color:#446;background:#1a1a30">OCR All</button>
-    <button class="tool-btn" id="btn-focus" style="border-color:#888">Focus Board</button>
-    <a class="tool-btn" id="btn-media-player" href="/mediaplayer" style="border-color:#c62;background:#2a1510">🎬 Media Player</a>
-    <a class="tool-btn" id="btn-pdf-viewer" href="/pdfviewer" style="border-color:#267">📄 PDF Viewer</a>
-
-    <!-- Training sample controls -->
-    <input class="label-input" id="sample-label" type="text" placeholder="Label for training sample" />
-    <button class="tool-btn" id="btn-save-sample" style="border-color:#264">Save Sample</button>
-    <span class="sample-status" id="sample-status">No sample saved yet</span>
-
-    <!-- Status indicators -->
-    <span id="conn-status" class="disconnected">● Offline</span>
-    <span id="pan-indicator" style="font-size:11px;color:#555;padding:3px 8px;background:#1a1a2e;border-radius:4px;">Canvas: 0% → 0% ↓</span>
-    <button class="tool-btn" id="btn-reset-view" style="border-color:#555;font-size:12px;">Reset View</button>
-    <button class="tool-btn" id="btn-download" style="border-color:#264;font-size:12px;">⬇ Download</button>
-
-    <!-- Mode label (shows DRAWING / ERASING / PEN UP etc.) -->
-    <div id="mode-label">◌ READY</div>
-  </div>
-
-  <!-- ═══════════════════════════════════════════════════════════ -->
-  <!-- CANVAS AREA — Webcam video + drawing surface + overlay      -->
-  <!-- ═══════════════════════════════════════════════════════════ -->
+      <div class="control-row secondary-controls">
+        <div class="control-group recognize-group">
+          <span class="group-label">RECOGNIZE</span>
+          <div class="button-set">
+            <select class="ocr-select" id="ocr-mode" aria-label="OCR mode">
+              <option value="sentence">Sentence</option>
+              <option value="continuous">Continuous Append</option>
+              <option value="line">Line</option>
+              <option value="word">Word</option>
+            </select>
+            <button class="tool-btn" id="btn-ocr-all">OCR All</button>
+          </div>
+        </div>
+        <div class="control-group sample-group">
+          <label class="group-label" for="sample-label">TRAINING SAMPLE</label>
+          <div class="button-set">
+            <input class="label-input" id="sample-label" type="text" placeholder="Enter a label..." />
+            <button class="tool-btn save-btn" id="btn-save-sample">＋ <span>Save Sample</span></button>
+          </div>
+          <span class="sample-status" id="sample-status">No sample saved yet</span>
+        </div>
+        <div class="control-group view-group">
+          <span class="group-label">CANVAS</span>
+          <div class="button-set">
+            <button class="tool-btn" id="btn-reset-view">Reset View</button>
+          </div>
+          <span id="pan-indicator">Canvas: 0% → 0% ↓</span>
+        </div>
+        <div class="connection-group">
+          <span class="group-label">BACKEND</span>
+          <span id="conn-status" class="disconnected">● Offline</span>
+        </div>
+      </div>
+    </section>
   <div id="canvas-wrapper">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="draw-canvas"></canvas>
@@ -81,22 +103,55 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
+  </main>
+
   <!-- OCR RESULT BAR — Shows recognized text                      -->
   <!-- ═══════════════════════════════════════════════════════════ -->
+  <div id="bottom-popups" aria-live="polite">
   <div id="ocr-bar">
-    <span>Recognized:</span>
-    <span id="ocr-text">No text recognized yet</span>
+    <div class="ocr-result-content">
+      <div class="ocr-original-row"><span class="ocr-caption">Recognized</span><span id="ocr-text">No text recognized yet</span></div>
+      <div id="spell-status" hidden aria-live="polite"></div>
+      <div id="spell-suggestion" hidden>
+        <div class="ocr-suggestion-row" id="spell-suggestion-row"><span class="ocr-caption" id="spell-caption">Suggestion</span><span id="spell-corrected-text"></span></div>
+        <div id="spell-correction-list"></div>
+      </div>
+    </div>
+    <div id="spell-actions" hidden>
+      <button class="tool-btn accept-correction" id="btn-accept-correction" type="button">Use suggestion</button>
+      <button class="tool-btn" id="btn-keep-original" type="button">Keep original</button>
+      <span id="spell-feedback" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <section id="sentence-builder" class="sentence-builder" aria-label="Sentence builder">
+    <div class="sentence-line">
+      <span class="sentence-caption">SENTENCE</span>
+      <span id="sentence-text" aria-live="polite">Your sentence will appear here</span>
+    </div>
+    <div id="next-word-panel" hidden aria-live="polite">
+      <span class="sentence-caption">NEXT WORD</span>
+      <span id="next-word-status">Suggestions appear after you add a word.</span>
+      <div id="next-word-options"></div>
+    </div>
+    <div class="sentence-controls">
+      <span id="sentence-hint">Left hand: 1–4 selects a spelling choice · thumbs up adds the word · thumbs down removes the last word · fist clears the spelling choice</span>
+      <button class="tool-btn sentence-action" id="btn-commit-word" type="button" disabled>＋ Add word</button>
+      <button class="tool-btn sentence-action" id="btn-pop-word" type="button" disabled>↶ Undo word</button>
+      <button class="tool-btn sentence-action" id="btn-clear-sentence" type="button">Clear sentence</button>
+    </div>
+  </section>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- STATUS BAR — Gesture instructions                           -->
   <!-- ═══════════════════════════════════════════════════════════ -->
   <div id="status-bar">
-    <strong>INDEX</strong> = Draw • <strong>INDEX + MIDDLE</strong> = Lift Pen • <strong>FIST</strong> = Erase • <strong>3 FINGERS</strong> = Pan Canvas • Hover buttons 0.5s to select • Auto-OCR after 2.5s pause
+    <strong>RIGHT HAND</strong> Index = Draw · Index+Middle spread = Lift · Index+Middle tips touch or fist = Erase · 3 fingers = Pan · Thumbs up = Shape Assist &nbsp;|&nbsp; <strong>LEFT HAND</strong> 1–4 fingers = Choose option · Thumb+Index = Undo canvas · Thumb+Index+Middle = Redo canvas · Thumbs up = Add word · Thumbs down = Remove last word · Fist = Clear selection
   </div>
 
   <!-- Load the application (ES module) -->
-  <script type="module" src="/static/js/app.js"></script>
+  <script type="module" src="/static/js/app.js?v=50"></script>
 
 </body>
 </html>

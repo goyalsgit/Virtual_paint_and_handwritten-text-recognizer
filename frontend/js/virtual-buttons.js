@@ -18,7 +18,7 @@ import {
   VBTN_SPACING,
   DWELL_TIME_MS,
   state,
-} from "./config.js";
+} from "./config.js?v=2";
 
 // ─────────────────────────────────────────────────────────────────
 // 1. BUILD THE BUTTON LIST

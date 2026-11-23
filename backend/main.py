@@ -1,4 +1,5 @@
 import os
+import asyncio
 import base64
 import csv
 import json
@@ -15,12 +16,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from starlette.concurrency import run_in_threadpool
 
 try:
-    from .ocr import get_ocr_backend_status, run_ocr
-except ImportError:
-    from ocr import get_ocr_backend_status, run_ocr
+    from backend.ocr import get_ocr_backend_status, run_ocr
+except (ImportError, ModuleNotFoundError):
+    try:
+        from .ocr import get_ocr_backend_status, run_ocr
+    except (ImportError, ModuleNotFoundError):
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        from ocr import get_ocr_backend_status, run_ocr
+
+try:
+    from backend.spell_correction import add_custom_word, is_spellchecker_available, suggest_corrections
+except (ImportError, ModuleNotFoundError):
+    from .spell_correction import add_custom_word, is_spellchecker_available, suggest_corrections
+
+try:
+    from backend.llm_spell_correction import enhance_spell_suggestions, is_llm_spellchecker_configured, suggest_next_words
+except (ImportError, ModuleNotFoundError):
+    from .llm_spell_correction import enhance_spell_suggestions, is_llm_spellchecker_configured, suggest_next_words
 
 # ═══════════════════════════════════════════════════════════════════
 # FASTAPI BACKEND — Air Drawing Web App
@@ -143,16 +158,6 @@ def append_manifest_row(image_path: Path, text: str):
 
 
 
-@app.on_event("startup")
-async def startup_event():
-    print("Pre-loading OCR model in background...")
-    try:
-        await run_in_threadpool(get_ocr_backend_status, load_model=True)
-        print("OCR model pre-loaded successfully!")
-    except Exception as exc:
-        print(f"Warning: OCR model warm-up encountered: {exc}")
-
-
 @app.get("/")
 async def root():
     index_path = FRONTEND_DIR / "index.html"
@@ -174,6 +179,13 @@ async def pdfviewer():
         return FileResponse(viewer_path)
     return {"error": "PDF Viewer not found"}
 
+@app.get("/presentation")
+async def presentation():
+    presentation_path = FRONTEND_DIR / "presentation.html"
+    if presentation_path.exists():
+        return FileResponse(presentation_path)
+    return {"error": "Presentation not found"}
+
 
 @app.get("/health")
 async def health():
@@ -182,6 +194,8 @@ async def health():
         "frontend": FRONTEND_DIR.exists(),
         "model": MODEL_PATH.exists(),
         "ocr": get_ocr_backend_status(load_model=False),
+        "spellcheck": is_spellchecker_available(),
+        "llm_spellcheck": is_llm_spellchecker_configured(),
     }
 
 
@@ -225,6 +239,19 @@ async def save_sample(payload: SampleSaveRequest):
     }
 
 
+async def send_next_word_suggestions(websocket: WebSocket, sentence: str, request_id):
+    suggestions, suggestion_status = await suggest_next_words(sentence, limit=4)
+    try:
+        await websocket.send_text(json.dumps({
+            "type": "next_word_suggestions",
+            "request_id": request_id,
+            "suggestions": suggestions,
+            "status": suggestion_status,
+        }))
+    except Exception as exc:
+        print(f"Could not return next-word suggestions: {exc}")
+
+
 
 
 @app.websocket("/ws")
@@ -240,6 +267,31 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if msg.get("type") == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
+                continue
+
+            if msg.get("type") == "add_word":
+                try:
+                    saved_word = add_custom_word(msg.get("word", ""))
+                    await websocket.send_text(json.dumps({
+                        "type": "word_added",
+                        "word": saved_word,
+                    }))
+                except (ValueError, RuntimeError) as exc:
+                    await websocket.send_text(json.dumps({
+                        "type": "word_add_error",
+                        "word": msg.get("word", ""),
+                        "message": str(exc),
+                    }))
+                continue
+
+            if msg.get("type") == "next_word_suggestions":
+                asyncio.create_task(
+                    send_next_word_suggestions(
+                        websocket,
+                        msg.get("sentence", ""),
+                        msg.get("request_id"),
+                    )
+                )
                 continue
 
             if msg.get("type") == "ocr":
@@ -267,16 +319,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 source_canvas = base64_to_cv2(source_b64) if source_b64 else None
                 save_debug_ocr_bundle(source_canvas, canvas, mode, preprocessed=preprocessed)
 
-                # Run OCR in threadpool to keep websocket event loop responsive
+                # Run OCR
                 print(
                     f"Running OCR (mode={mode}, preprocessed={preprocessed}, image={canvas.shape})"
                 )
-                result = await run_in_threadpool(run_ocr, canvas, mode=mode, preprocessed=preprocessed)
+                result = run_ocr(canvas, mode=mode, preprocessed=preprocessed)
 
                 if result:
+                    suggested_text, corrections = suggest_corrections(result)
+                    suggested_text, corrections, llm_status = await enhance_spell_suggestions(
+                        result, suggested_text, corrections
+                    )
                     await websocket.send_text(json.dumps({
                         "type": "ocr_result",
                         "text": result,
+                        "suggested_text": suggested_text,
+                        "corrections": corrections,
+                        "spellcheck_available": is_spellchecker_available(),
+                        "llm_spellcheck_status": llm_status,
                         "success": True
                     }))
                     print(f"OCR result: '{result}'")
