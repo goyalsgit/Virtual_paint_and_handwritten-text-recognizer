@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 try:
     from .ocr import get_ocr_backend_status, run_ocr
@@ -142,6 +143,16 @@ def append_manifest_row(image_path: Path, text: str):
 
 
 
+@app.on_event("startup")
+async def startup_event():
+    print("Pre-loading OCR model in background...")
+    try:
+        await run_in_threadpool(get_ocr_backend_status, load_model=True)
+        print("OCR model pre-loaded successfully!")
+    except Exception as exc:
+        print(f"Warning: OCR model warm-up encountered: {exc}")
+
+
 @app.get("/")
 async def root():
     index_path = FRONTEND_DIR / "index.html"
@@ -256,11 +267,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 source_canvas = base64_to_cv2(source_b64) if source_b64 else None
                 save_debug_ocr_bundle(source_canvas, canvas, mode, preprocessed=preprocessed)
 
-                # Run OCR
+                # Run OCR in threadpool to keep websocket event loop responsive
                 print(
                     f"Running OCR (mode={mode}, preprocessed={preprocessed}, image={canvas.shape})"
                 )
-                result = run_ocr(canvas, mode=mode, preprocessed=preprocessed)
+                result = await run_in_threadpool(run_ocr, canvas, mode=mode, preprocessed=preprocessed)
 
                 if result:
                     await websocket.send_text(json.dumps({

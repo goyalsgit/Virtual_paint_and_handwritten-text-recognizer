@@ -15,13 +15,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # MODEL CONFIGURATION - Choose which model to use
 # ═══════════════════════════════════════════════════════════════
 
-# Option 1: Your fine-tuned LARGE model (2.3GB - best accuracy, slow deployment)
+# Option 1: Fine-tuned BASE model (400MB - fast, highly accurate local model)
+BASE_FINETUNED_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_base_finetuned"
+FINETUNED_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_finetuned"
 DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_large_model"
-DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
-
-# Option 2: Fine-tuned BASE model (400MB - good accuracy, fast deployment)
-# DEFAULT_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_base_finetuned"
-# DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-base-handwritten"
+DEFAULT_TROCR_MODEL_ID = "microsoft/trocr-base-handwritten"
+LARGE_TROCR_MODEL_ID = "microsoft/trocr-large-handwritten"
 
 # Fallback if neither exists
 FALLBACK_TROCR_MODEL_DIR = PROJECT_ROOT / "artifacts" / "trocr_airdraw" / "best"
@@ -279,22 +278,43 @@ class _TrOCREngine:
             if self.device == "cuda":
                 model_kwargs["torch_dtype"] = torch.float16
 
-            self.processor = TrOCRProcessor.from_pretrained(self.model_ref)
+            self.processor = None
+            is_local = Path(self.model_ref).exists()
+            proc_kwargs = {"local_files_only": True} if is_local else {}
+            try:
+                self.processor = TrOCRProcessor.from_pretrained(self.model_ref, **proc_kwargs)
+            except Exception:
+                # Try from cache or hub
+                try:
+                    self.processor = TrOCRProcessor.from_pretrained(self.model_ref, local_files_only=True)
+                except Exception:
+                    self.processor = TrOCRProcessor.from_pretrained(self.model_ref)
+
+            model_load_kwargs = dict(model_kwargs)
+            if is_local:
+                model_load_kwargs["local_files_only"] = True
 
             try:
                 self.model = VisionEncoderDecoderModel.from_pretrained(
                     self.model_ref,
-                    **model_kwargs,
+                    **model_load_kwargs,
                 )
             except (OSError, EnvironmentError):
                 print(
                     f"Local checkpoint '{self.model_ref}' has no model weights, "
                     f"loading weights from '{DEFAULT_TROCR_MODEL_ID}'"
                 )
-                self.model = VisionEncoderDecoderModel.from_pretrained(
-                    DEFAULT_TROCR_MODEL_ID,
-                    **model_kwargs,
-                )
+                try:
+                    self.model = VisionEncoderDecoderModel.from_pretrained(
+                        DEFAULT_TROCR_MODEL_ID,
+                        local_files_only=True,
+                        **model_kwargs,
+                    )
+                except Exception:
+                    self.model = VisionEncoderDecoderModel.from_pretrained(
+                        DEFAULT_TROCR_MODEL_ID,
+                        **model_kwargs,
+                    )
             self.model.to(self.device)
             self.model.eval()
             self.available = True
@@ -384,21 +404,29 @@ def _preferred_trocr_model_ref():
 
     Priority order:
       1. AIRDRAW_OCR_MODEL env var (explicit override)
-      2. artifacts/trocr_finetuned (preferred fine-tuned checkpoint)
-      3. artifacts/trocr_airdraw/best (legacy training output)
-      4. microsoft/trocr-large-handwritten (Hugging Face fallback)
+      2. artifacts/trocr_base_finetuned (local fine-tuned base checkpoint)
+      3. artifacts/trocr_large_model (local fine-tuned large checkpoint)
+      4. artifacts/trocr_finetuned (fine-tuned checkpoint)
+      5. artifacts/trocr_airdraw/best (legacy training output)
+      6. microsoft/trocr-base-handwritten (cached Hugging Face fallback)
     """
     explicit = os.getenv("AIRDRAW_OCR_MODEL", "").strip()
     if explicit:
         return explicit
+    if _has_model_files(BASE_FINETUNED_MODEL_DIR):
+        return str(BASE_FINETUNED_MODEL_DIR)
     if _has_model_files(DEFAULT_TROCR_MODEL_DIR):
         return str(DEFAULT_TROCR_MODEL_DIR)
+    if _has_model_files(FINETUNED_MODEL_DIR):
+        return str(FINETUNED_MODEL_DIR)
     if _has_model_files(FALLBACK_TROCR_MODEL_DIR):
         return str(FALLBACK_TROCR_MODEL_DIR)
     return DEFAULT_TROCR_MODEL_ID
 
 
 def _local_trocr_checkpoint_dir():
+    if _has_model_files(BASE_FINETUNED_MODEL_DIR):
+        return str(BASE_FINETUNED_MODEL_DIR)
     return str(DEFAULT_TROCR_MODEL_DIR)
 
 

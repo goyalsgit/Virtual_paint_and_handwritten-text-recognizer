@@ -8,16 +8,16 @@
 
 // ── Server URLs ─────────────────────────────────────────────────────
 export const WS_URL = (() => {
-  const host = window.location.hostname;
-  if (!host || host === "localhost" || host === "127.0.0.1") {
+  if (typeof window === "undefined" || !window.location) {
     return "ws://localhost:8000/ws";
   }
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocol}://${host}/ws`;
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = window.location.host || "localhost:8000";
+  return `${protocol}//${host}/ws`;
 })();
 
 export const BACKEND_URL = (() => {
-  if (window.location.origin && window.location.origin !== "null") {
+  if (typeof window !== "undefined" && window.location.origin && window.location.origin !== "null") {
     return window.location.origin;
   }
   return WS_URL.replace("ws://", "http://").replace("wss://", "https://").replace("/ws", "");
